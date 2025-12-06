@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: rust-datastar-mp
+    env: rust
+    plan: free
+    branch: main
+    preDeployCommand: cd client && npm ci && npm run build
+    buildCommand: cd server/api && cargo build --release
+    startCommand: ./server/api/target/release/api
+    envVars:
+      - key: PORT
+        generateValue: true
+      - key: RUST_LOG
+        value: info
+    healthCheckPath: /health
+
