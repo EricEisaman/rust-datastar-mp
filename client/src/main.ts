@@ -1,6 +1,6 @@
 /**
  * Main Entry Point
- * 
+ *
  * Pure TypeScript application - no Vue!
  * Uses Babylon.js for rendering and GUI.
  */
@@ -13,11 +13,12 @@ import './datastar-boot';
 
 // Initialize when DOM is ready
 function init(): void {
-  const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
-  if (!canvas) {
-    console.error('Canvas element not found!');
+  const canvasElement = document.getElementById('game-canvas');
+  if (!canvasElement || !(canvasElement instanceof HTMLCanvasElement)) {
+    console.error('Canvas element not found or not a canvas!');
     return;
   }
+  const canvas: HTMLCanvasElement = canvasElement;
 
   // Set canvas size
   canvas.width = window.innerWidth;
@@ -29,12 +30,12 @@ function init(): void {
   // Initialize player on server
   initPlayer();
 
-  // Setup input handlers
-  setupInput();
-
   // Create Babylon renderer (includes chat GUI)
   const renderer = new BabylonRenderer(canvas);
-  
+
+  // Setup input handlers (requires scene from renderer)
+  setupInput(renderer.getScene());
+
   // Register renderer with Datastar manager
   datastarManager.register(renderer);
 

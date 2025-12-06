@@ -17,8 +17,23 @@ pub async fn send_message(
 ) -> impl IntoResponse {
     eprintln!("Received chat message from player {}: {}", request.player_id, request.text);
     
+    // Look up player name and generate color
+    let game_state = app_state.game_state.read().await;
+    let player = game_state.players.get(&request.player_id);
+    
+    let (player_name, player_color) = if let Some(player) = player {
+        (player.name.clone(), game_core::player_color::get_player_color(&player.id))
+    } else {
+        // Fallback if player not found
+        (format!("Player-{}", &request.player_id.to_string()[..8]), "#FFFFFF".to_string())
+    };
+    
+    drop(game_state); // Release lock
+    
     let message = game_core::ChatMessage {
         player_id: request.player_id,
+        player_name,
+        player_color,
         text: request.text.clone(),
         timestamp: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

@@ -19,6 +19,7 @@ pub async fn get_config(
             "ground_y": app_state.game_config.physics.ground_y,
             "player_width": app_state.game_config.physics.player_width,
             "player_height": app_state.game_config.physics.player_height,
+            "ground_color": app_state.game_config.physics.ground_color,
         },
         "platforms": app_state.game_config.platforms.iter().map(|p| json!({
             "id": p.id,
@@ -26,6 +27,15 @@ pub async fn get_config(
             "x_end": p.x_end,
             "y_top": p.y_top,
             "height": p.height,
+            "color": p.color,
+        })).collect::<Vec<_>>(),
+        "walls": app_state.game_config.walls.iter().map(|w| json!({
+            "id": w.id,
+            "x": w.x,
+            "y_bottom": w.y_bottom,
+            "y_top": w.y_top,
+            "width": w.width,
+            "color": w.color,
         })).collect::<Vec<_>>(),
     }))
 }

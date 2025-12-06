@@ -4,11 +4,14 @@ export class PlayerController {
   private inputMap: Record<string, boolean> = {};
 
   private speed = 3.5;
+  
+  private player: Mesh;
 
   constructor(
-    private player: Mesh,
-    scene: Scene,
+    player: Mesh,
+    scene: Scene
   ) {
+    this.player = player;
     this.player.checkCollisions = true;
     this.player.ellipsoid = new Vector3(0.5, 1, 0.5);
 
@@ -44,4 +47,3 @@ export class PlayerController {
     }
   }
 }
-

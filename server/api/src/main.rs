@@ -13,19 +13,41 @@ use game_core::GameState;
 #[tokio::main]
 async fn main() {
     // Load game configuration from JSON file
-    let config_path = std::env::var("GAME_CONFIG_PATH")
-        .unwrap_or_else(|_| "server/game_core/game_config.json".to_string());
+    // Try multiple paths to find the config file
+    let config_paths = vec![
+        std::env::var("GAME_CONFIG_PATH").ok(),
+        Some("server/game_core/game_config.json".to_string()),
+        Some("../game_core/game_config.json".to_string()),
+        Some("game_core/game_config.json".to_string()),
+    ];
     
-    let game_config = match game_core::config::GameConfig::load(&config_path) {
-        Ok(config) => {
-            eprintln!("✅ Loaded game configuration from: {}", config_path);
-            std::sync::Arc::new(config)
-        }
-        Err(e) => {
-            eprintln!("⚠️ Failed to load game config from {}: {}. Using defaults.", config_path, e);
+    let game_config = config_paths
+        .into_iter()
+        .flatten()
+        .find_map(|path| {
+            match game_core::config::GameConfig::load(&path) {
+                Ok(config) => {
+                    eprintln!("✅ Loaded game configuration from: {}", path);
+                    eprintln!("📊 Config summary: {} platform(s), {} wall(s)", 
+                        config.platforms.len(), config.walls.len());
+                    for (i, platform) in config.platforms.iter().enumerate() {
+                        eprintln!("  Platform {}: id={}, x_start={}, x_end={}, y_top={}, height={}, color={}", 
+                            i + 1, platform.id, platform.x_start, platform.x_end, 
+                            platform.y_top, platform.height, platform.color);
+                    }
+                    Some(std::sync::Arc::new(config))
+                }
+                Err(e) => {
+                    eprintln!("⚠️ Failed to load game config from {}: {}", path, e);
+                    None
+                }
+            }
+        })
+        .unwrap_or_else(|| {
+            eprintln!("❌ Could not load game config from any path. Using defaults.");
+            eprintln!("⚠️ WARNING: Server is using DEFAULT config values, not your game_config.json!");
             std::sync::Arc::new(game_core::config::GameConfig::default())
-        }
-    };
+        });
     
     // Initialize physics system with configuration
     game_core::physics::init(game_config.clone());

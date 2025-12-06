@@ -1,21 +1,51 @@
 {
   "physics": {
-    "gravity": -2000.0,
-    "jump_velocity": 250.0,
-    "move_acceleration": 1200.0,
-    "move_deceleration": 1500.0,
-    "max_horizontal_velocity": 300.0,
+    "gravity": -700.0,
+    "jump_velocity": 120.0,
+    "move_acceleration": 120.0,
+    "move_deceleration": 150.0,
+    "max_horizontal_velocity": 50.0,
     "ground_y": -10.0,
     "player_width": 1.5,
-    "player_height": 1.5
+    "player_height": 1.5,
+    "ground_slide_friction": 100.0,
+    "platform_slide_friction": 100.0,
+    "ground_color": "#8B6F47"
   },
   "platforms": [
     {
       "id": "platform_1",
-      "x_start": -3.0,
-      "x_end": 3.0,
+      "x_start": -10.0,
+      "x_end": -5.0,
       "y_top": 2.0,
-      "height": 0.5
+      "height": 0.5,
+      "color": "#B34700"
+    },
+    {
+      "id": "platform_2",
+      "x_start": -1.0,
+      "x_end": 6.0,
+      "y_top": 4.0,
+      "height": 0.5,
+      "color": "#03FF33"
+    }
+  ],
+  "walls": [
+    {
+      "id": "wall_left",
+      "x": -15.0,
+      "y_bottom": -10.0,
+      "y_top": 8.0,
+      "width": 0.5,
+      "color": "#666666"
+    },
+    {
+      "id": "wall_right",
+      "x": 15.0,
+      "y_bottom": -10.0,
+      "y_top": 8.0,
+      "width": 0.5,
+      "color": "#666600"
     }
   ]
 }

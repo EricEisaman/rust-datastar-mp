@@ -1,6 +1,6 @@
 /**
  * Datastar Initialization
- * 
+ *
  * Sets up the Datastar update manager and registers all receivers.
  * This is the central initialization point for all Datastar-based updates.
  */
@@ -40,4 +40,3 @@ export function initializeDatastar(endpoint: string = '/events'): void {
  * Useful for registering additional receivers at runtime
  */
 export { datastarManager };
-

@@ -6,6 +6,7 @@ use std::path::Path;
 pub struct GameConfig {
     pub physics: PhysicsConfig,
     pub platforms: Vec<PlatformConfig>,
+    pub walls: Vec<WallConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,6 +19,12 @@ pub struct PhysicsConfig {
     pub ground_y: f32,
     pub player_width: f32,
     pub player_height: f32,
+    /// Friction when sliding on ground (applied to horizontal velocity)
+    pub ground_slide_friction: f32,
+    /// Friction when sliding on platforms (applied to horizontal velocity)
+    pub platform_slide_friction: f32,
+    /// Ground color as hex string (e.g., "#8B6F47")
+    pub ground_color: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,6 +34,23 @@ pub struct PlatformConfig {
     pub x_end: f32,
     pub y_top: f32,
     pub height: f32,
+    /// Platform color as hex string (e.g., "#B34733")
+    pub color: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WallConfig {
+    pub id: String,
+    /// Left edge x position of the wall
+    pub x: f32,
+    /// Bottom y position of the wall
+    pub y_bottom: f32,
+    /// Top y position of the wall
+    pub y_top: f32,
+    /// Width (thickness) of the wall
+    pub width: f32,
+    /// Wall color as hex string (e.g., "#666666")
+    pub color: String,
 }
 
 impl GameConfig {
@@ -55,6 +79,9 @@ impl GameConfig {
                 ground_y: -10.0,
                 player_width: 1.5,
                 player_height: 1.5,
+                ground_slide_friction: 800.0,
+                platform_slide_friction: 600.0,
+                ground_color: "#8B6F47".to_string(),
             },
             platforms: vec![PlatformConfig {
                 id: "platform_1".to_string(),
@@ -62,7 +89,9 @@ impl GameConfig {
                 x_end: 3.0,
                 y_top: 2.0,
                 height: 0.5,
+                color: "#B34733".to_string(),
             }],
+            walls: vec![],
         }
     }
 }

@@ -9,10 +9,9 @@ export function buildCollisionMeshes(tiles: Tile[], scene: Scene): void {
       const box = MeshBuilder.CreateBox(
         `tile-${tile.x}-${tile.y}`,
         { width: 1, height: 1, depth: 0.5 },
-        scene,
+        scene
       );
       box.position.set(tile.x + 0.5, tile.y + 0.5, 0);
       box.checkCollisions = true;
     });
 }
-

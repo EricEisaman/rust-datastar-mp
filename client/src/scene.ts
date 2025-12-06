@@ -8,22 +8,41 @@ import {
   Color4,
 } from '@babylonjs/core';
 
-export function createScene(engine: Engine, _canvas: HTMLCanvasElement): Scene {
+export function createScene(engine: Engine, canvas: HTMLCanvasElement): Scene {
   const scene = new Scene(engine);
 
   scene.collisionsEnabled = true;
 
   // Fixed orthographic camera for 2D side-scrolling
-  // Camera is completely fixed - no movement or controls
-  // Camera view: -10 to 10 world units on both axes
-  // Camera positioned to view area with ground at bottom
-  const camera = new UniversalCamera('ortho-camera', new Vector3(0, 0, -10), scene);
+  // Camera maintains fixed aspect ratio to prevent stretching
+  // Camera view: ground at y=-10, platforms up to y=4, so we need to see from -10 to at least 6
+  // We'll use a view from y=-10 (ground) to y=8 to give some headroom above platform 2
+  const camera = new UniversalCamera('ortho-camera', new Vector3(0, -1, -10), scene);
   camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
-  // Fixed view: -10 to 10 world units (covers -1000 to 1000 pixels with 0.01 scale)
-  camera.orthoLeft = -10;
-  camera.orthoRight = 10;
-  camera.orthoTop = 10;
-  camera.orthoBottom = -10;
+
+  // Calculate aspect ratio to maintain fixed world dimensions
+  // This prevents stretching when window resizes
+  const updateCameraBounds = () => {
+    const aspect = canvas.width / canvas.height;
+    const worldHeight = 18.0; // Fixed world height (from -10 to 8)
+    const worldWidth = worldHeight * aspect;
+
+    // Center the view horizontally, maintain fixed vertical bounds
+    // Ground at y=-10 (bottom), platforms at y=2 and y=4, with headroom up to y=8
+    camera.orthoLeft = -worldWidth / 2.0;
+    camera.orthoRight = worldWidth / 2.0;
+    camera.orthoTop = 8.0; // Top of view (above platform 2 at y=4)
+    camera.orthoBottom = -10.0; // Bottom of view (ground level)
+  };
+
+  // Set initial bounds
+  updateCameraBounds();
+
+  // Update bounds when canvas resizes
+  engine.onResizeObservable.add(() => {
+    updateCameraBounds();
+  });
+
   // NO attachControl - camera is completely fixed
   camera.checkCollisions = false; // No collisions needed for fixed camera
 
@@ -36,4 +55,3 @@ export function createScene(engine: Engine, _canvas: HTMLCanvasElement): Scene {
 
   return scene;
 }
-

@@ -1,10 +1,10 @@
 /**
  * IDatastar Interface
- * 
+ *
  * Top-level interface for any object that receives updates from Datastar SSE.
  * This pattern allows for consistent update handling across game entities,
  * UI components, and other reactive systems.
- * 
+ *
  * Implementation pattern:
  * - Classes implement this interface to receive Datastar updates
  * - Register implementations with DatastarUpdateManager
@@ -21,7 +21,7 @@ export interface IDatastar {
   /**
    * Handle a signal patch update from Datastar
    * Signal patches contain JSON data that updates reactive state
-   * 
+   *
    * @param signalName - The name of the signal (e.g., "gameState", "chatState")
    * @param data - The signal data (parsed JSON object)
    */
@@ -30,7 +30,7 @@ export interface IDatastar {
   /**
    * Handle an element patch update from Datastar
    * Element patches contain HTML/DOM updates
-   * 
+   *
    * @param selector - CSS selector for the target element
    * @param mode - Patch mode: "append", "replace", "prepend", etc.
    * @param html - HTML content to apply
@@ -75,4 +75,3 @@ export abstract class BaseDatastarReceiver implements IDatastar {
     // Default: no-op
   }
 }
-

@@ -7,12 +7,7 @@ export class SpriteAnimator {
   private frameCount = 4;
   private lastUpdate = 0;
 
-  constructor(
-    scene: Scene,
-    texturePath: string,
-    position: Vector3,
-    size: number = 1.5,
-  ) {
+  constructor(scene: Scene, texturePath: string, position: Vector3, size: number = 1.5) {
     // Create sprite manager with texture atlas
     // For now, we'll use a placeholder - in production, use actual sprite sheet
     this.manager = new SpriteManager('playerManager', texturePath, 1024, 64, scene);
@@ -44,4 +39,3 @@ export class SpriteAnimator {
     this.manager.dispose();
   }
 }
-

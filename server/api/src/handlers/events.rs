@@ -50,11 +50,13 @@ pub async fn events_handler(
                     }
                 }
                 Ok(message) = chat_rx.recv() => {
-                    eprintln!("💬 Broadcasting chat message via SSE: {}: {}", message.player_id, message.text);
+                    eprintln!("💬 Broadcasting chat message via SSE: {} ({}): {}", message.player_name, message.player_id, message.text);
+                    // Format message with player name in their color
                     let patch = PatchElements::new(
                         format!(
-                            r#"<div style="margin-bottom: 8px; font-size: 14px">{}: {}</div>"#,
-                            message.player_id,
+                            r#"<div style="margin-bottom: 8px; font-size: 14px"><span style="color: {}; font-weight: bold;">{}:</span> {}</div>"#,
+                            message.player_color,
+                            message.player_name,
                             message.text
                         )
                     )
