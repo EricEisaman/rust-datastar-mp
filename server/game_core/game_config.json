@@ -1,15 +1,16 @@
 {
+  "remote_config": "https://raw.githubusercontent.com/EricEisaman/config-haven/main/configs/rust-datastar-md-config.json",
   "physics": {
-    "gravity": -700.0,
-    "jump_velocity": 120.0,
+    "gravity": -130.0,
+    "jump_velocity": 50.0,
     "move_acceleration": 120.0,
     "move_deceleration": 150.0,
-    "max_horizontal_velocity": 50.0,
+    "max_horizontal_velocity": 150.0,
     "ground_y": -10.0,
     "player_width": 1.5,
     "player_height": 1.5,
-    "ground_slide_friction": 100.0,
-    "platform_slide_friction": 100.0,
+    "ground_slide_friction": 10.0,
+    "platform_slide_friction": 10.0,
     "ground_color": "#8B6F47"
   },
   "platforms": [
@@ -17,7 +18,7 @@
       "id": "platform_1",
       "x_start": -10.0,
       "x_end": -5.0,
-      "y_top": 2.0,
+      "y_top": -5.0,
       "height": 0.5,
       "color": "#B34700"
     },
@@ -25,7 +26,7 @@
       "id": "platform_2",
       "x_start": -1.0,
       "x_end": 6.0,
-      "y_top": 4.0,
+      "y_top": 0.0,
       "height": 0.5,
       "color": "#03FF33"
     }

@@ -62,9 +62,11 @@ export class DatastarUpdateManager {
     // Handle element patches
     this.eventSource.addEventListener('datastar-patch-elements', (event: MessageEvent) => {
       console.log(`[DatastarManager] 📬 Received datastar-patch-elements event`);
+      console.log(`[DatastarManager] 📬 Event type: ${event.type}`);
+      console.log(`[DatastarManager] 📬 Event data (full):`, event.data);
       console.log(
-        `[DatastarManager] 📬 Event data (first 200 chars):`,
-        event.data.substring(0, 200)
+        `[DatastarManager] 📬 Event data (first 500 chars):`,
+        event.data.substring(0, 500)
       );
       this.handleElementPatch(event.data);
     });
@@ -202,89 +204,120 @@ export class DatastarUpdateManager {
 
   /**
    * Handle an element patch update
+   * Datastar format can be: "elements #selector mode html" or JSON or other formats
    */
   private handleElementPatch(data: string): void {
     console.log(`[DatastarManager] 📨 Handling element patch (full): ${data}`);
     console.log(`[DatastarManager] 📨 Data type: ${typeof data}, length: ${data.length}`);
 
+    let selector = '';
+    let mode: 'append' | 'replace' | 'prepend' = 'append';
+    let html = '';
+
     try {
-      // Datastar element patch format can be:
-      // 1. "elements #selector mode html"
-      // 2. Just the data part from SSE
-      // 3. JSON format
-
-      let selector = '';
-      let mode = 'append';
-      let html = '';
-
-      // Try format 1: "elements #selector mode html"
+      // Try multiple parsing strategies for different Datastar formats
+      
+      // Strategy 1: Standard format "elements #selector mode html"
       if (data.startsWith('elements ')) {
-        const afterElements = data.substring(9);
-        const selectorMatch = afterElements.match(/^(#[^\s]+|.[^\s]+|\w+)/);
-
-        if (selectorMatch && selectorMatch[1]) {
-          selector = selectorMatch[1];
-          const afterSelector = afterElements.substring(selector.length).trim();
-
-          if (afterSelector.startsWith('append ')) {
-            mode = 'append';
-            html = afterSelector.substring(7).trim();
-          } else if (afterSelector.startsWith('replace ')) {
-            mode = 'replace';
-            html = afterSelector.substring(8).trim();
-          } else if (afterSelector.startsWith('prepend ')) {
-            mode = 'prepend';
-            html = afterSelector.substring(8).trim();
-          } else {
-            // No mode specified, assume append and use rest as HTML
-            html = afterSelector;
-          }
+        const rest = data.substring(9).trim();
+        
+        // Regex to capture selector, mode, and HTML in one go
+        // Format: "elements #selector mode html"
+        const match = rest.match(/^(#[^\s]+|\.[^\s]+)\s+(append|replace|prepend)\s+(.*)/s);
+        
+        if (match && match[1] && match[2] && match[3]) {
+          selector = match[1];
+          mode = match[2] as 'append' | 'replace' | 'prepend';
+          html = match[3];
+          console.log(`[DatastarManager] ✅ Parsed (strategy 1): selector="${selector}", mode="${mode}", html length=${html.length}`);
         } else {
-          console.warn(`[DatastarManager] ⚠️ Could not parse selector from: ${afterElements}`);
-        }
-      } else {
-        // Try to parse as JSON or other format
-        // The data might just be the HTML or a different format
-        console.warn(
-          `[DatastarManager] ⚠️ Element patch doesn't start with 'elements ', trying alternative parsing`
-        );
-
-        // If it contains #chat-messages, try to extract it
-        if (data.includes('#chat-messages')) {
-          selector = '#chat-messages';
-          // Try to find HTML content
-          const htmlMatch = data.match(/<div[^>]*>.*?<\/div>/s);
-          if (htmlMatch) {
-            html = htmlMatch[0];
-            mode = 'append';
+          // Fallback: try to find selector and mode separately
+          const selectorMatch = rest.match(/^(#[^\s]+|\.[^\s]+)/);
+          if (selectorMatch && selectorMatch[1]) {
+            selector = selectorMatch[1];
+            const afterSelector = rest.substring(selector.length).trim();
+            
+            if (afterSelector.startsWith('append ')) {
+              mode = 'append';
+              html = afterSelector.substring(7).trim();
+            } else if (afterSelector.startsWith('replace ')) {
+              mode = 'replace';
+              html = afterSelector.substring(8).trim();
+            } else if (afterSelector.startsWith('prepend ')) {
+              mode = 'prepend';
+              html = afterSelector.substring(8).trim();
+            } else {
+              // No explicit mode, assume append
+              mode = 'append';
+              html = afterSelector;
+            }
+            console.log(`[DatastarManager] ✅ Parsed (strategy 1 fallback): selector="${selector}", mode="${mode}", html length=${html.length}`);
           } else {
-            // Use the whole data as HTML
-            html = data;
+            console.error(`[DatastarManager] ❌ Could not parse elements format: ${rest.substring(0, 200)}`);
+            return;
           }
         }
       }
-
-      if (selector && html) {
-        console.log(
-          `[DatastarManager] ✅ Parsed element patch: selector=${selector}, mode=${mode}, html=${html.substring(0, 100)}...`
-        );
-
-        // Route to all receivers
-        for (const receiver of this.receivers.values()) {
-          try {
-            console.log(`[DatastarManager] 📤 Routing to receiver: ${receiver.id}`);
-            receiver.onElementUpdate(selector, mode, html);
-          } catch (err) {
-            console.error(`[DatastarManager] ❌ Error in receiver ${receiver.id}:`, err);
+      // Strategy 2: JSON format (if Datastar sends JSON)
+      else if (data.trim().startsWith('{')) {
+        try {
+          const json = JSON.parse(data);
+          if (json.selector && json.html) {
+            selector = json.selector;
+            mode = json.mode || 'append';
+            html = json.html;
+            console.log(`[DatastarManager] ✅ Parsed (strategy 2 JSON): selector="${selector}", mode="${mode}", html length=${html.length}`);
+          } else {
+            console.error(`[DatastarManager] ❌ JSON format missing selector or html:`, json);
+            return;
           }
+        } catch (jsonErr) {
+          console.error(`[DatastarManager] ❌ Failed to parse as JSON:`, jsonErr);
+          return;
         }
-      } else {
-        console.warn(
-          `[DatastarManager] ⚠️ Could not parse element patch - selector: ${selector}, html length: ${html.length}`
-        );
+      }
+      // Strategy 3: Just HTML (fallback for #chat-messages)
+      else if (data.trim().startsWith('<')) {
+        selector = '#chat-messages';
+        mode = 'append';
+        html = data.trim();
+        console.log(`[DatastarManager] ⚠️ Parsed (strategy 3 HTML-only): assuming selector="${selector}", mode="${mode}", html length=${html.length}`);
+      }
+      // Strategy 4: Try to extract from any format that might contain the data
+      else {
+        // Last resort: try to find HTML-like content and assume #chat-messages
+        const htmlMatch = data.match(/<div[^>]*>.*?<\/div>/s);
+        if (htmlMatch) {
+          selector = '#chat-messages';
+          mode = 'append';
+          html = htmlMatch[0];
+          console.log(`[DatastarManager] ⚠️ Parsed (strategy 4 regex): extracted HTML, selector="${selector}", html length=${html.length}`);
+        } else {
+          console.error(`[DatastarManager] ❌ Unknown element patch format: ${data.substring(0, 500)}`);
+          console.error(`[DatastarManager] ❌ Full data dump:`, data);
+          return;
+        }
+      }
+
+      if (!selector || !html) {
+        console.error(`[DatastarManager] ❌ Missing selector or HTML after parsing: selector="${selector}", html length=${html.length}`);
+        console.error(`[DatastarManager] ❌ Original data: ${data.substring(0, 500)}`);
+        return;
+      }
+
+      // Route to all receivers
+      for (const receiver of this.receivers.values()) {
+        try {
+          console.log(`[DatastarManager] 📤 Routing element patch to receiver: ${receiver.id}`);
+          receiver.onElementUpdate(selector, mode, html);
+        } catch (err) {
+          console.error(`[DatastarManager] ❌ Error in receiver ${receiver.id}:`, err);
+        }
       }
     } catch (err) {
-      console.error('[DatastarManager] ❌ Failed to parse element patch:', err, 'Data:', data);
+      console.error('[DatastarManager] ❌ Failed to parse element patch:', err);
+      console.error('[DatastarManager] ❌ Data was:', data.substring(0, 500));
+      console.error('[DatastarManager] ❌ Full data:', data);
     }
   }
 }

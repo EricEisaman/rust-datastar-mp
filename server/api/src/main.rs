@@ -21,33 +21,49 @@ async fn main() {
         Some("game_core/game_config.json".to_string()),
     ];
     
-    let game_config = config_paths
+    eprintln!("🚀 Starting server...");
+    eprintln!("🔍 Looking for game config file...");
+    
+    // Try to find a valid config file path first
+    let config_path = config_paths
         .into_iter()
         .flatten()
-        .find_map(|path| {
-            match game_core::config::GameConfig::load(&path) {
-                Ok(config) => {
-                    eprintln!("✅ Loaded game configuration from: {}", path);
-                    eprintln!("📊 Config summary: {} platform(s), {} wall(s)", 
-                        config.platforms.len(), config.walls.len());
-                    for (i, platform) in config.platforms.iter().enumerate() {
-                        eprintln!("  Platform {}: id={}, x_start={}, x_end={}, y_top={}, height={}, color={}", 
-                            i + 1, platform.id, platform.x_start, platform.x_end, 
-                            platform.y_top, platform.height, platform.color);
-                    }
-                    Some(std::sync::Arc::new(config))
-                }
-                Err(e) => {
-                    eprintln!("⚠️ Failed to load game config from {}: {}", path, e);
-                    None
-                }
-            }
-        })
-        .unwrap_or_else(|| {
-            eprintln!("❌ Could not load game config from any path. Using defaults.");
-            eprintln!("⚠️ WARNING: Server is using DEFAULT config values, not your game_config.json!");
-            std::sync::Arc::new(game_core::config::GameConfig::default())
+        .find(|path| {
+            eprintln!("  Trying: {}", path);
+            std::path::Path::new(path).exists()
         });
+    
+    let game_config = if let Some(path) = config_path {
+        // Use async loading to support remote config fetching
+        match game_core::config::GameConfig::load_async(&path).await {
+            Ok(config) => {
+                eprintln!("✅ Loaded game configuration from: {}", path);
+                if config.remote_config.is_none() {
+                    eprintln!("📡 Note: Config was loaded from remote URL (remote_config was set and fetched)");
+                }
+                eprintln!("📊 Config summary: {} platform(s), {} wall(s)", 
+                    config.platforms.len(), config.walls.len());
+                for (i, platform) in config.platforms.iter().enumerate() {
+                    eprintln!("  Platform {}: id={}, x_start={}, x_end={}, y_top={}, height={}, color={}", 
+                        i + 1, platform.id, platform.x_start, platform.x_end, 
+                        platform.y_top, platform.height, platform.color);
+                }
+                std::sync::Arc::new(config)
+            }
+            Err(e) => {
+                eprintln!("⚠️ Failed to load game config from {}: {}", path, e);
+                eprintln!("❌ Falling back to default configuration.");
+                eprintln!("⚠️ WARNING: Server is using DEFAULT config values, not your game_config.json!");
+                std::sync::Arc::new(game_core::config::GameConfig::default())
+            }
+        }
+    } else {
+        eprintln!("❌ Could not find game config file in any of the expected paths.");
+        eprintln!("⚠️ WARNING: Server is using DEFAULT config values, not your game_config.json!");
+        std::sync::Arc::new(game_core::config::GameConfig::default())
+    };
+    
+    eprintln!("✅ Configuration loaded successfully");
     
     // Initialize physics system with configuration
     game_core::physics::init(game_config.clone());
@@ -88,7 +104,10 @@ async fn main() {
         .merge(routes::create_routes(app_state))
         .fallback_service(static_files);
 
+    eprintln!("🌐 Starting HTTP server on {}...", addr);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    eprintln!("✅ Server is ready! Listening on http://{}", addr);
+    eprintln!("📡 SSE endpoint available at: http://{}/events", addr);
     axum::serve(listener, app).await.unwrap();
 }
 

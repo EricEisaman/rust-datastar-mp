@@ -145,15 +145,24 @@ fn check_horizontal_collision(player: &mut Player, player_width: f32, player_hei
         let vertical_overlap = player_top > platform_bottom && player_bottom < platform_top;
         
         if horizontal_overlap && vertical_overlap {
-            // Collision detected - resolve based on movement direction
+            // Collision detected - properly reset position based on boundary
             if player.velocity_x > 0.0 {
-                // Moving right, push player to the left of platform
-                player.x = platform_left - player_width / 2.0;
+                // Moving right, push player to exactly at the left boundary of platform
+                player.x = platform_left - player_width / 2.0 - 0.001; // Small epsilon to prevent overlap
                 player.velocity_x = 0.0;
             } else if player.velocity_x < 0.0 {
-                // Moving left, push player to the right of platform
-                player.x = platform_right + player_width / 2.0;
+                // Moving left, push player to exactly at the right boundary of platform
+                player.x = platform_right + player_width / 2.0 + 0.001; // Small epsilon to prevent overlap
                 player.velocity_x = 0.0;
+            } else {
+                // No horizontal velocity, resolve based on which side is closer
+                let dist_to_left = (player_right - platform_left).abs();
+                let dist_to_right = (player_left - platform_right).abs();
+                if dist_to_left < dist_to_right {
+                    player.x = platform_left - player_width / 2.0 - 0.001;
+                } else {
+                    player.x = platform_right + player_width / 2.0 + 0.001;
+                }
             }
         }
     }
@@ -170,10 +179,10 @@ fn check_horizontal_collision(player: &mut Player, player_width: f32, player_hei
         let vertical_overlap = player_top > wall_bottom && player_bottom < wall_top;
         
         if horizontal_overlap && vertical_overlap {
-            // Collision detected - resolve based on movement direction
+            // Collision detected - properly reset position based on boundary
             if player.velocity_x > 0.0 {
-                // Moving right, push player to the left of wall
-                player.x = wall_left - player_width / 2.0;
+                // Moving right, push player to exactly at the left boundary of wall
+                player.x = wall_left - player_width / 2.0 - 0.001; // Small epsilon to prevent overlap
                 player.velocity_x = 0.0;
                 // Check if sliding down wall
                 if player.velocity_y < 0.0 {
@@ -183,8 +192,8 @@ fn check_horizontal_collision(player: &mut Player, player_width: f32, player_hei
                     };
                 }
             } else if player.velocity_x < 0.0 {
-                // Moving left, push player to the right of wall
-                player.x = wall_right + player_width / 2.0;
+                // Moving left, push player to exactly at the right boundary of wall
+                player.x = wall_right + player_width / 2.0 + 0.001; // Small epsilon to prevent overlap
                 player.velocity_x = 0.0;
                 // Check if sliding down wall
                 if player.velocity_y < 0.0 {
@@ -192,6 +201,15 @@ fn check_horizontal_collision(player: &mut Player, player_width: f32, player_hei
                         side: crate::ground_state::SlideSide::Right,
                         platform_id: None,
                     };
+                }
+            } else {
+                // No horizontal velocity, resolve based on which side is closer
+                let dist_to_left = (player_right - wall_left).abs();
+                let dist_to_right = (player_left - wall_right).abs();
+                if dist_to_left < dist_to_right {
+                    player.x = wall_left - player_width / 2.0 - 0.001;
+                } else {
+                    player.x = wall_right + player_width / 2.0 + 0.001;
                 }
             }
         }
@@ -209,9 +227,10 @@ fn check_vertical_collision(player: &mut Player, player_width: f32, player_heigh
     let player_bottom = player.y - player_height / 2.0;
     let player_top = player.y + player_height / 2.0;
     
-    // Check ground collision first
+    // Check ground collision first - properly reset position at exact boundary
     if player_bottom <= config.physics.ground_y {
-        player.y = config.physics.ground_y + player_height / 2.0;
+        // Reset player position to exactly at ground boundary
+        player.y = config.physics.ground_y + player_height / 2.0 + 0.001; // Small epsilon to prevent overlap
         player.velocity_y = 0.0;
         player.ground_state = GroundState::Grounded { platform_id: None };
         return true;
@@ -231,8 +250,8 @@ fn check_vertical_collision(player: &mut Player, player_width: f32, player_heigh
             && player.velocity_y <= 0.0
             && player_bottom <= platform_top + 0.05
             && player_bottom >= platform_top - 0.2 {
-            // Landing on platform from above
-            player.y = platform_top + player_height / 2.0;
+            // Landing on platform from above - properly reset position at exact boundary
+            player.y = platform_top + player_height / 2.0 + 0.001; // Small epsilon to prevent overlap
             player.velocity_y = 0.0;
             player.ground_state = GroundState::Grounded { platform_id: Some(idx as u32) };
             return true;
@@ -243,8 +262,8 @@ fn check_vertical_collision(player: &mut Player, player_width: f32, player_heigh
             && player.velocity_y > 0.0
             && player_top >= platform_bottom - 0.05
             && player_top <= platform_bottom + 0.2 {
-            // Hit platform from below
-            player.y = platform_bottom - player_height / 2.0;
+            // Hit platform from below - properly reset position at exact boundary
+            player.y = platform_bottom - player_height / 2.0 - 0.001; // Small epsilon to prevent overlap
             player.velocity_y = 0.0;
             return true;
         }
@@ -266,9 +285,9 @@ fn resolve_collisions(player: &mut Player, player_width: f32, player_height: f32
     let player_bottom = player.y - player_height / 2.0;
     let player_top = player.y + player_height / 2.0;
     
-    // Check ground penetration
+    // Check ground penetration - properly reset position at exact boundary
     if player_bottom < config.physics.ground_y {
-        player.y = config.physics.ground_y + player_height / 2.0;
+        player.y = config.physics.ground_y + player_height / 2.0 + 0.001; // Small epsilon to prevent overlap
         player.velocity_y = 0.0;
         player.ground_state = GroundState::Grounded { platform_id: None };
         return;
@@ -294,8 +313,8 @@ fn resolve_collisions(player: &mut Player, player_width: f32, player_height: f32
             let min_dist = dist_to_top.min(dist_to_bottom).min(dist_to_left).min(dist_to_right);
             
             if min_dist == dist_to_left {
-                // Push left - check if sliding
-                player.x = wall_left - player_width / 2.0;
+                // Push left - properly reset position at exact boundary
+                player.x = wall_left - player_width / 2.0 - 0.001; // Small epsilon to prevent overlap
                 if player.velocity_y < 0.0 {
                     // Sliding down left side of wall
                     player.ground_state = GroundState::Sliding {
@@ -306,8 +325,8 @@ fn resolve_collisions(player: &mut Player, player_width: f32, player_height: f32
                     player.velocity_x = 0.0;
                 }
             } else if min_dist == dist_to_right {
-                // Push right - check if sliding
-                player.x = wall_right + player_width / 2.0;
+                // Push right - properly reset position at exact boundary
+                player.x = wall_right + player_width / 2.0 + 0.001; // Small epsilon to prevent overlap
                 if player.velocity_y < 0.0 {
                     // Sliding down right side of wall
                     player.ground_state = GroundState::Sliding {
@@ -318,12 +337,12 @@ fn resolve_collisions(player: &mut Player, player_width: f32, player_height: f32
                     player.velocity_x = 0.0;
                 }
             } else if min_dist == dist_to_top && player_bottom < wall_top {
-                // Push up to top of wall
-                player.y = wall_top + player_height / 2.0;
+                // Push up to top of wall - properly reset position at exact boundary
+                player.y = wall_top + player_height / 2.0 + 0.001; // Small epsilon to prevent overlap
                 player.velocity_y = 0.0;
             } else if min_dist == dist_to_bottom && player_top > wall_bottom {
-                // Push down below wall
-                player.y = wall_bottom - player_height / 2.0;
+                // Push down below wall - properly reset position at exact boundary
+                player.y = wall_bottom - player_height / 2.0 - 0.001; // Small epsilon to prevent overlap
                 player.velocity_y = 0.0;
             }
             return;
@@ -350,17 +369,17 @@ fn resolve_collisions(player: &mut Player, player_width: f32, player_height: f32
             let min_dist = dist_to_top.min(dist_to_bottom).min(dist_to_left).min(dist_to_right);
             
             if min_dist == dist_to_top && player_bottom < platform_top {
-                // Push up to top of platform
-                player.y = platform_top + player_height / 2.0;
+                // Push up to top of platform - properly reset position at exact boundary
+                player.y = platform_top + player_height / 2.0 + 0.001; // Small epsilon to prevent overlap
                 player.velocity_y = 0.0;
                 player.ground_state = GroundState::Grounded { platform_id: Some(idx as u32) };
             } else if min_dist == dist_to_bottom && player_top > platform_bottom {
-                // Push down below platform
-                player.y = platform_bottom - player_height / 2.0;
+                // Push down below platform - properly reset position at exact boundary
+                player.y = platform_bottom - player_height / 2.0 - 0.001; // Small epsilon to prevent overlap
                 player.velocity_y = 0.0;
             } else if min_dist == dist_to_left {
-                // Push left - check if sliding
-                player.x = platform_left - player_width / 2.0;
+                // Push left - properly reset position at exact boundary
+                player.x = platform_left - player_width / 2.0 - 0.001; // Small epsilon to prevent overlap
                 if player.velocity_y < 0.0 {
                     // Sliding down left side
                     player.ground_state = GroundState::Sliding { 
@@ -371,8 +390,8 @@ fn resolve_collisions(player: &mut Player, player_width: f32, player_height: f32
                     player.velocity_x = 0.0;
                 }
             } else if min_dist == dist_to_right {
-                // Push right - check if sliding
-                player.x = platform_right + player_width / 2.0;
+                // Push right - properly reset position at exact boundary
+                player.x = platform_right + player_width / 2.0 + 0.001; // Small epsilon to prevent overlap
                 if player.velocity_y < 0.0 {
                     // Sliding down right side
                     player.ground_state = GroundState::Sliding { 
@@ -392,13 +411,25 @@ pub fn apply_command(player: &mut Player, command: &crate::commands::PlayerComma
     let config = get_config();
     match command {
         crate::commands::PlayerCommand::MoveLeft => {
+            // Horizontal controls while in flying state should not affect anything
+            if player.ground_state.is_flying() {
+                return;
+            }
+            
             // Apply acceleration, but clamp to max velocity
+            // When grounded, this enables smooth horizontal movement that can transition to sliding
             player.velocity_x = (player.velocity_x - config.physics.move_acceleration * 0.016)
                 .max(-config.physics.max_horizontal_velocity);
             player.facing_right = false;
         }
         crate::commands::PlayerCommand::MoveRight => {
+            // Horizontal controls while in flying state should not affect anything
+            if player.ground_state.is_flying() {
+                return;
+            }
+            
             // Apply acceleration, but clamp to max velocity
+            // When grounded, this enables smooth horizontal movement that can transition to sliding
             player.velocity_x = (player.velocity_x + config.physics.move_acceleration * 0.016)
                 .min(config.physics.max_horizontal_velocity);
             player.facing_right = true;

@@ -43,9 +43,16 @@ pub async fn send_message(
     
     // Idempotent: Broadcasting the same message multiple times is safe
     // (Datastar best practice for network resilience)
+    eprintln!("💬 Attempting to broadcast chat message: player={}, text=\"{}\"", message.player_name, message.text);
     match app_state.chat_tx.send(message) {
-        Ok(_) => eprintln!("Chat message broadcast successfully"),
-        Err(e) => eprintln!("Failed to broadcast chat message: {:?}", e),
+        Ok(_) => {
+            eprintln!("✅ Chat message broadcast successfully - should be received by SSE handler");
+        },
+        Err(e) => {
+            eprintln!("❌ Failed to broadcast chat message: {:?}", e);
+            eprintln!("❌ Error details: message text=\"{}\"", e.0.text);
+            eprintln!("❌ This usually means no SSE clients are connected (no receivers subscribed to chat_tx)");
+        },
     }
     
     // Return empty response - Datastar will update via SSE patches

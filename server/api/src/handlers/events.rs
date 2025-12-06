@@ -52,22 +52,28 @@ pub async fn events_handler(
                 Ok(message) = chat_rx.recv() => {
                     eprintln!("💬 Broadcasting chat message via SSE: {} ({}): {}", message.player_name, message.player_id, message.text);
                     // Format message with player name in their color
-                    let patch = PatchElements::new(
-                        format!(
-                            r#"<div style="margin-bottom: 8px; font-size: 14px"><span style="color: {}; font-weight: bold;">{}:</span> {}</div>"#,
-                            message.player_color,
-                            message.player_name,
-                            message.text
-                        )
-                    )
-                    .selector("#chat-messages")
-                    .mode(ElementPatchMode::Append);
+                    let html_content = format!(
+                        r#"<div style="margin-bottom: 8px; font-size: 14px"><span style="color: {}; font-weight: bold;">{}:</span> {}</div>"#,
+                        message.player_color,
+                        message.player_name,
+                        message.text
+                    );
+                    eprintln!("💬 HTML content: {}", html_content);
+                    
+                    let patch = PatchElements::new(html_content.clone())
+                        .selector("#chat-messages")
+                        .mode(ElementPatchMode::Append);
                     let event = patch.into_datastar_event();
-                    eprintln!("💬 Chat patch event: {}", event);
+                    eprintln!("💬 Chat patch event (full): {}", event);
+                    eprintln!("💬 Chat patch event (Display): {:?}", format!("{}", event));
+                    
+                    let event_data = format!("{}", event);
+                    eprintln!("💬 Sending SSE event: event=datastar-patch-elements, data length={}", event_data.len());
+                    
                     // Set the event type for proper SSE routing
                     yield Ok(Event::default()
                         .event("datastar-patch-elements")
-                        .data(format!("{}", event)));
+                        .data(event_data));
                 }
             }
         }

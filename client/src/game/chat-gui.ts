@@ -405,19 +405,29 @@ export class ChatGUI extends BaseDatastarReceiver implements IDatastar {
       `[${this.id}] 📤 Sending chat message: "${text}" from player: ${this.playerId.substring(0, 8)}`
     );
 
+    const payload = {
+      player_id: this.playerId,
+      text: text,
+    };
+
+    console.log(`[${this.id}] 📤 Sending chat payload:`, JSON.stringify(payload));
+
     fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        player_id: this.playerId,
-        text: text,
-      }),
+      body: JSON.stringify(payload),
     })
-      .then((response) => {
+      .then(async (response) => {
         if (!response.ok) {
-          console.error(`[${this.id}] ❌ Chat message failed with status:`, response.status);
+          const errorText = await response.text();
+          console.error(
+            `[${this.id}] ❌ Chat message failed with status: ${response.status}, error: ${errorText}`
+          );
         } else {
-          console.log(`[${this.id}] ✅ Chat message sent successfully:`, text);
+          const responseText = await response.text();
+          console.log(
+            `[${this.id}] ✅ Chat message sent successfully: "${text}" (response: ${responseText || 'empty'})`
+          );
           // Clear input after successful send
           if (this.inputField) {
             this.inputField.text = '';

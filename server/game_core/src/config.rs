@@ -4,6 +4,10 @@ use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameConfig {
+    /// Optional URL to fetch configuration from remotely
+    /// If set, the server will fetch config from this URL instead of using local file
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remote_config: Option<String>,
     pub physics: PhysicsConfig,
     pub platforms: Vec<PlatformConfig>,
     pub walls: Vec<WallConfig>,
@@ -54,11 +58,83 @@ pub struct WallConfig {
 }
 
 impl GameConfig {
-    /// Load game configuration from JSON file
+    /// Load game configuration from JSON file synchronously
+    /// This is a convenience wrapper for sync contexts
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
         let contents = fs::read_to_string(path)?;
         let config: GameConfig = serde_json::from_str(&contents)?;
+        
+        // If remote_config is specified, we can't fetch it synchronously
+        // This will be handled by load_async instead
+        if let Some(remote_url) = &config.remote_config {
+            if !remote_url.is_empty() {
+                eprintln!("⚠️ remote_config found but load() is synchronous. Use load_async() instead.");
+                eprintln!("⚠️ Using local config file (remote config will not be fetched)");
+            }
+        }
+        
         Ok(config)
+    }
+
+    /// Load game configuration from JSON file asynchronously
+    /// If the config contains a remote_config URL, it will fetch and use that instead
+    pub async fn load_async<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
+        let path = path.as_ref();
+        let contents = tokio::fs::read_to_string(path).await?;
+        let config: GameConfig = serde_json::from_str(&contents)?;
+        
+        // Check if remote_config is specified
+        if let Some(remote_url) = &config.remote_config {
+            if !remote_url.is_empty() {
+                eprintln!("🌐 Remote config URL found: {}", remote_url);
+                eprintln!("📥 Fetching configuration from remote URL...");
+                
+                match Self::fetch_remote_config(remote_url).await {
+                    Ok(remote_config) => {
+                        eprintln!("✅ Successfully loaded configuration from remote URL");
+                        eprintln!("📊 Remote config summary: {} platform(s), {} wall(s)", 
+                            remote_config.platforms.len(), remote_config.walls.len());
+                        Ok(remote_config)
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️ Failed to fetch remote config: {}", e);
+                        eprintln!("⚠️ Falling back to local config file");
+                        Ok(config)
+                    }
+                }
+            } else {
+                eprintln!("⚠️ remote_config is empty string, using local config");
+                Ok(config)
+            }
+        } else {
+            Ok(config)
+        }
+    }
+
+    /// Fetch configuration from a remote URL
+    async fn fetch_remote_config(url: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()?;
+        
+        let response = client.get(url).send().await?;
+        
+        if !response.status().is_success() {
+            return Err(format!("HTTP error: {}", response.status()).into());
+        }
+        
+        let json_text = response.text().await?;
+        
+        // Parse the remote config (should not have remote_config field)
+        let config: GameConfig = serde_json::from_str(&json_text)?;
+        
+        // Ensure remote_config is None in the fetched config (prevent recursion)
+        Ok(GameConfig {
+            remote_config: None,
+            physics: config.physics,
+            platforms: config.platforms,
+            walls: config.walls,
+        })
     }
 
     /// Load game configuration from JSON string (for network loading)
@@ -70,6 +146,7 @@ impl GameConfig {
     /// Get default configuration (fallback if file loading fails)
     pub fn default() -> Self {
         Self {
+            remote_config: None,
             physics: PhysicsConfig {
                 gravity: -2000.0,
                 jump_velocity: 250.0,
