@@ -20,17 +20,20 @@ WORKDIR /app
 RUN apk add --no-cache musl-dev
 
 # Copy workspace Cargo.toml first
-COPY server/Cargo.toml server/Cargo.lock ./server/
+COPY server/Cargo.toml ./server/
 
 # Copy individual crate Cargo.toml files
 COPY server/api/Cargo.toml ./server/api/
 COPY server/game_core/Cargo.toml ./server/game_core/
 
 # Create dummy source files to cache dependencies
-RUN mkdir -p server/api/src server/game_core/src && \
-    echo "fn main() {}" > server/api/src/main.rs && \
-    echo "pub fn dummy() {}" > server/game_core/src/lib.rs && \
-    cd server && cargo build --release && \
+# Generate Cargo.lock (it may be gitignored, so we always generate it for reproducible builds)
+RUN cd server && \
+    cargo generate-lockfile && \
+    mkdir -p api/src game_core/src && \
+    echo "fn main() {}" > api/src/main.rs && \
+    echo "pub fn dummy() {}" > game_core/src/lib.rs && \
+    cargo build --release && \
     rm -rf api/src game_core/src target/release/deps/api* target/release/deps/game_core*
 
 # Copy actual source code

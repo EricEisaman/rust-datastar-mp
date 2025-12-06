@@ -3,6 +3,9 @@ node_modules/
 server/target/
 client/dist/
 
+# Note: Cargo.lock should be included for reproducible builds
+# If it's gitignored, it will be generated during Docker build
+
 # Git
 .git/
 .gitignore
