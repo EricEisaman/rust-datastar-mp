@@ -14,7 +14,8 @@ COPY client/ ./
 RUN npm run build
 
 # Stage 2: Build Rust backend
-FROM rust:1.75-alpine AS backend
+# Use latest Rust version to support edition2024 required by datastar 0.3
+FROM rust:latest-alpine AS backend
 WORKDIR /app
 
 # Install build dependencies
