@@ -14,12 +14,17 @@ COPY client/ ./
 RUN npm run build
 
 # Stage 2: Build Rust backend
-# Use latest Rust version to support edition2024 required by datastar 0.3
-FROM rust:latest-alpine AS backend
+# Use Rust 1.86 (Debian-based) to support edition2024 required by datastar 0.3
+# Debian-based images are more reliable than alpine for Rust builds
+FROM rust:1.86-bookworm AS backend
 WORKDIR /app
 
-# Install build dependencies
-RUN apk add --no-cache musl-dev
+# Install build dependencies for Debian
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy workspace Cargo.toml first
 COPY server/Cargo.toml ./server/
