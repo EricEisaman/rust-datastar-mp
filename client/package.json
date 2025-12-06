@@ -7,40 +7,31 @@
     "dev:server": "cd ../server/api && cargo run",
     "dev:client": "vite",
     "build": "vite build",
-    "lint:only": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx --fix",
+    "lint:only": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx --fix",
     "preview": "vite preview",
     "lint": "eslint . --fix",
     "lint:check": "eslint .",
-    "format": "prettier --write \"src/**/*.{js,ts,vue,json,css,scss,md}\"",
-    "format:check": "prettier --check \"src/**/*.{js,ts,vue,json,css,scss,md}\"",
-    "type-check": "vue-tsc --noEmit"
+    "format": "prettier --write \"src/**/*.{js,ts,json,css,scss,md}\"",
+    "format:check": "prettier --check \"src/**/*.{js,ts,json,css,scss,md}\"",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@babylonjs/core": "^8.40.1",
     "@babylonjs/gui": "^8.40.1",
     "@babylonjs/loaders": "^8.40.1",
     "@babylonjs/materials": "^8.40.1",
-    "@starfederation/datastar": "^1.0.0-beta.11",
-    "@vueuse/core": "^14.1.0",
-    "vue": "3.6.0-alpha.6",
-    "vuetify": "^3.11.2"
+    "@starfederation/datastar": "^1.0.0-beta.11"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@typescript-eslint/eslint-plugin": "^8.48.1",
     "@typescript-eslint/parser": "^8.48.1",
-    "@vitejs/plugin-vue": "^6.0.2",
-    "@vue/eslint-config-typescript": "^14.6.0",
     "concurrently": "^9.1.0",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
-    "eslint-plugin-vue": "^10.6.2",
-    "eslint-plugin-vuetify": "^2.5.3",
     "prettier": "^3.7.4",
     "typescript": "^5.9.3",
-    "vite": "^7.2.6",
-    "vite-plugin-vuetify": "^2.1.2",
-    "vue-tsc": "^3.1.6"
+    "vite": "^7.2.6"
   }
 }

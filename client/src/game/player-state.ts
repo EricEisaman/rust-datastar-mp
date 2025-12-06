@@ -1,5 +1,3 @@
-import { ref } from 'vue';
-
 /**
  * Player data structure matching server-side Player
  * Note: ground_state is a discriminated union on server, but we use on_ground for compatibility
@@ -23,7 +21,11 @@ export type GroundState =
   | { type: 'Sliding'; side: 'left' | 'right'; platform_id: number | null }
   | { type: 'Flying' };
 
-export const gameState = ref<{ gameState: Player[] }>({ gameState: [] });
+/**
+ * Simple reactive game state object (replaces Vue ref)
+ * Maintains the same API (gameState.value) for compatibility
+ */
+export const gameState = { value: { gameState: [] as Player[] } };
 
 export function getPlayerId(): string {
   // Use sessionStorage instead of localStorage so each tab gets a unique ID

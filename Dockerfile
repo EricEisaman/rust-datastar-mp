@@ -5,9 +5,8 @@ FROM node:20-alpine AS frontend
 WORKDIR /app/client
 
 # Copy package files and install dependencies
-# Use --legacy-peer-deps to handle peer dependency conflicts (Vue 3.6 alpha + Vuetify)
 COPY client/package.json client/package-lock.json ./
-RUN npm ci --legacy-peer-deps
+RUN npm ci
 
 # Copy client source and build
 COPY client/ ./
@@ -56,6 +55,10 @@ COPY --from=backend /app/server/target/release/api /usr/local/bin/api
 
 # Copy built frontend from frontend stage
 COPY --from=frontend /app/client/dist ./client/dist
+
+# Copy game_config.json to the runtime image
+# The server looks for it at /app/game_config.json (Docker) or game_core/game_config.json (local dev)
+COPY server/game_core/game_config.json ./game_config.json
 
 # Expose port (Render.com sets PORT env var)
 EXPOSE 3000

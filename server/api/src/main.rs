@@ -16,9 +16,11 @@ async fn main() {
     // Try multiple paths to find the config file
     let config_paths = vec![
         std::env::var("GAME_CONFIG_PATH").ok(),
-        Some("server/game_core/game_config.json".to_string()),
-        Some("../game_core/game_config.json".to_string()),
-        Some("game_core/game_config.json".to_string()),
+        Some("/app/game_config.json".to_string()), // Docker absolute path
+        Some("./game_config.json".to_string()),    // Docker relative path
+        Some("server/game_core/game_config.json".to_string()), // Local dev
+        Some("../game_core/game_config.json".to_string()),    // Local dev alternative
+        Some("game_core/game_config.json".to_string()),       // Local dev alternative
     ];
     
     eprintln!("🚀 Starting server...");
