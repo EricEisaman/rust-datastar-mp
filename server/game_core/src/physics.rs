@@ -39,28 +39,44 @@ pub fn update_player_physics(player: &mut Player, delta_time: f32) {
     }
     
     // Apply horizontal friction based on ground state
+    // Friction should be much weaker to allow smooth movement
+    // It only slows down movement, doesn't completely stop it immediately
     match player.ground_state {
         GroundState::Grounded { platform_id: _ } => {
-            // Normal deceleration when grounded
-            let friction = config.physics.move_deceleration * delta_time;
-            if player.velocity_x > 0.0 {
-                player.velocity_x = (player.velocity_x - friction).max(0.0);
-            } else if player.velocity_x < 0.0 {
-                player.velocity_x = (player.velocity_x + friction).min(0.0);
+            // Normal deceleration when grounded - apply very gentle friction
+            // Friction is applied every frame (60fps), but commands come every 100ms
+            // So we need friction to be extremely weak to allow movement
+            // Use a tiny fraction of deceleration to allow smooth movement
+            let friction = (config.physics.move_deceleration * 0.01) * delta_time; // Reduce friction by 99%
+            if player.velocity_x.abs() > 0.01 { // Only apply friction if velocity is significant
+                if player.velocity_x > 0.0 {
+                    player.velocity_x = (player.velocity_x - friction).max(0.0);
+                } else if player.velocity_x < 0.0 {
+                    player.velocity_x = (player.velocity_x + friction).min(0.0);
+                }
+            } else {
+                // If velocity is very small, just stop it
+                player.velocity_x = 0.0;
             }
         }
         GroundState::Sliding { platform_id, .. } => {
             // Apply sliding friction (different for ground vs platform)
+            // Sliding friction should be very weak to allow smooth sliding
             let slide_friction = if platform_id.is_some() {
                 config.physics.platform_slide_friction
             } else {
                 config.physics.ground_slide_friction
-            } * delta_time;
+            } * 0.01 * delta_time; // Reduce sliding friction by 99%
             
-            if player.velocity_x > 0.0 {
-                player.velocity_x = (player.velocity_x - slide_friction).max(0.0);
-            } else if player.velocity_x < 0.0 {
-                player.velocity_x = (player.velocity_x + slide_friction).min(0.0);
+            if player.velocity_x.abs() > 0.01 { // Only apply friction if velocity is significant
+                if player.velocity_x > 0.0 {
+                    player.velocity_x = (player.velocity_x - slide_friction).max(0.0);
+                } else if player.velocity_x < 0.0 {
+                    player.velocity_x = (player.velocity_x + slide_friction).min(0.0);
+                }
+            } else {
+                // If velocity is very small, just stop it
+                player.velocity_x = 0.0;
             }
         }
         GroundState::Flying => {
@@ -418,7 +434,9 @@ pub fn apply_command(player: &mut Player, command: &crate::commands::PlayerComma
             
             // Apply acceleration, but clamp to max velocity
             // When grounded, this enables smooth horizontal movement that can transition to sliding
-            player.velocity_x = (player.velocity_x - config.physics.move_acceleration * 0.016)
+            // Use a larger acceleration value to overcome friction
+            let acceleration = config.physics.move_acceleration * 0.016;
+            player.velocity_x = (player.velocity_x - acceleration)
                 .max(-config.physics.max_horizontal_velocity);
             player.facing_right = false;
         }
@@ -430,7 +448,9 @@ pub fn apply_command(player: &mut Player, command: &crate::commands::PlayerComma
             
             // Apply acceleration, but clamp to max velocity
             // When grounded, this enables smooth horizontal movement that can transition to sliding
-            player.velocity_x = (player.velocity_x + config.physics.move_acceleration * 0.016)
+            // Use a larger acceleration value to overcome friction
+            let acceleration = config.physics.move_acceleration * 0.016;
+            player.velocity_x = (player.velocity_x + acceleration)
                 .min(config.physics.max_horizontal_velocity);
             player.facing_right = true;
         }
