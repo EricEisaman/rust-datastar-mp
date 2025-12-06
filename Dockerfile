@@ -5,8 +5,9 @@ FROM node:20-alpine AS frontend
 WORKDIR /app/client
 
 # Copy package files and install dependencies
+# Use --legacy-peer-deps to handle peer dependency conflicts (Vue 3.6 alpha + Vuetify)
 COPY client/package.json client/package-lock.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 # Copy client source and build
 COPY client/ ./
