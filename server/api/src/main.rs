@@ -12,6 +12,24 @@ use game_core::GameState;
 
 #[tokio::main]
 async fn main() {
+    // Load game configuration from JSON file
+    let config_path = std::env::var("GAME_CONFIG_PATH")
+        .unwrap_or_else(|_| "server/game_core/game_config.json".to_string());
+    
+    let game_config = match game_core::config::GameConfig::load(&config_path) {
+        Ok(config) => {
+            eprintln!("✅ Loaded game configuration from: {}", config_path);
+            std::sync::Arc::new(config)
+        }
+        Err(e) => {
+            eprintln!("⚠️ Failed to load game config from {}: {}. Using defaults.", config_path, e);
+            std::sync::Arc::new(game_core::config::GameConfig::default())
+        }
+    };
+    
+    // Initialize physics system with configuration
+    game_core::physics::init(game_config.clone());
+    
     let port = std::env::var("PORT")
         .unwrap_or_else(|_| "3000".to_string())
         .parse::<u16>()
@@ -29,6 +47,7 @@ async fn main() {
         game_tx: game_tx.clone(),
         chat_tx: chat_tx.clone(),
         command_tx,
+        game_config: game_config.clone(),
     };
 
     tokio::spawn(game_loop(game_state, command_rx, game_tx.clone()));

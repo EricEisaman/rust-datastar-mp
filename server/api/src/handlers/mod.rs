@@ -2,6 +2,7 @@ pub mod health;
 pub mod events;
 pub mod chat;
 pub mod game;
+pub mod config;
 
 use axum::response::IntoResponse;
 

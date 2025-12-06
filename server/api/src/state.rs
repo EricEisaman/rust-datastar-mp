@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use game_core::GameState;
+use game_core::GameConfig;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -8,5 +9,6 @@ pub struct AppState {
     pub game_tx: broadcast::Sender<crate::GameUpdate>,
     pub chat_tx: broadcast::Sender<game_core::ChatMessage>,
     pub command_tx: mpsc::Sender<(uuid::Uuid, game_core::PlayerCommand)>,
+    pub game_config: Arc<GameConfig>,
 }
 

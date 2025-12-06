@@ -21,8 +21,24 @@ export class BabylonRenderer extends BaseDatastarReceiver {
   private playerSprites: Map<string, Sprite> = new Map();
   private spriteManager: SpriteManager | null = null;
   private groundMesh: Mesh | null = null;
-  private platformMesh: Mesh | null = null;
+  private platformMeshes: Map<string, Mesh> = new Map();
   private chatGUI: ChatGUI | null = null;
+  
+  // Game configuration (loaded from server)
+  private gameConfig: {
+    physics: {
+      ground_y: number;
+      player_width: number;
+      player_height: number;
+    };
+    platforms: Array<{
+      id: string;
+      x_start: number;
+      x_end: number;
+      y_top: number;
+      height: number;
+    }>;
+  } | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     super();
@@ -42,8 +58,10 @@ export class BabylonRenderer extends BaseDatastarReceiver {
     // Create ground
     this.createGround();
 
-    // Create platform for Metroidvania gameplay
-    this.createPlatform();
+    // Load game config and create platforms
+    this.loadGameConfig().then(() => {
+      this.createPlatforms();
+    });
 
     // Create chat GUI
     this.chatGUI = new ChatGUI(this.engine, this.scene);
@@ -170,38 +188,83 @@ export class BabylonRenderer extends BaseDatastarReceiver {
     console.log(`[${this.id}] ✅ Ground box created at y=-10 (bottom of screen)`);
   }
 
-  private createPlatform(): void {
-    // Create platform as a box mesh for 2D Metroidvania style
-    // Platform is 6 meters (world units) wide as requested
-    // Position it above the ground
-    
-    // Create a 6-meter wide, thin box for the platform
-    this.platformMesh = MeshBuilder.CreateBox(
-      'platform',
-      { 
-        width: 6,    // 6 world units = 6 meters wide (as requested)
-        height: 0.5, // 0.5 world units tall
-        depth: 0.1   // Very thin depth for 2D look
-      },
-      this.scene,
-    );
-    
-    // Position platform above the ground
-    // Platform top is at y=5, so center the box at y=5 - 0.25 = 4.75
-    this.platformMesh.position.x = 0;
-    this.platformMesh.position.y = 5.0 - 0.25; // Platform top at y=5, center box slightly lower
-    this.platformMesh.position.z = 0;
-    
-    // Create light blue platform material with toon shading
+  /**
+   * Load game configuration from server
+   */
+  private async loadGameConfig(): Promise<void> {
+    try {
+      const response = await fetch('/api/config');
+      if (!response.ok) {
+        throw new Error(`Failed to load game config: ${response.statusText}`);
+      }
+      this.gameConfig = await response.json();
+      console.log(`[${this.id}] ✅ Loaded game config:`, this.gameConfig);
+    } catch (error) {
+      console.error(`[${this.id}] ❌ Failed to load game config:`, error);
+      // Use default config as fallback
+      this.gameConfig = {
+        physics: {
+          ground_y: -10.0,
+          player_width: 1.5,
+          player_height: 1.5,
+        },
+        platforms: [
+          {
+            id: 'platform_1',
+            x_start: -3.0,
+            x_end: 3.0,
+            y_top: 2.0,
+            height: 0.5,
+          },
+        ],
+      };
+    }
+  }
+
+  /**
+   * Create all platforms from game configuration
+   */
+  private createPlatforms(): void {
+    if (!this.gameConfig) {
+      console.warn(`[${this.id}] ⚠️ Game config not loaded, skipping platform creation`);
+      return;
+    }
+
+    // Create dark reddish-orange platform material with toon shading (shared across all platforms)
     const platformMaterial = new StandardMaterial('platformMaterial', this.scene);
-    platformMaterial.diffuseColor = new Color3(0.4, 0.7, 1.0); // Light blue (#66B3FF)
-    // Toon shading: use emissive to create flat, unlit appearance
-    platformMaterial.emissiveColor = new Color3(0.4, 0.7, 1.0); // Same as diffuse for flat look
-    platformMaterial.specularColor = new Color3(0, 0, 0); // No specular highlights
-    platformMaterial.disableLighting = true; // Completely flat, unlit appearance (toon style)
-    this.platformMesh.material = platformMaterial;
-    
-    console.log(`[${this.id}] ✅ Platform box created: 6 meters wide at y=0`);
+    platformMaterial.diffuseColor = new Color3(0.7, 0.3, 0.2); // Dark reddish-orange (#B34733)
+    platformMaterial.emissiveColor = new Color3(0.7, 0.3, 0.2); // Toon shading
+    platformMaterial.specularColor = new Color3(0, 0, 0);
+    platformMaterial.disableLighting = true;
+
+    // Create a platform mesh for each platform in the config
+    for (const platform of this.gameConfig.platforms) {
+      const width = platform.x_end - platform.x_start;
+      const centerX = (platform.x_start + platform.x_end) / 2.0;
+      const centerY = platform.y_top - platform.height / 2.0;
+
+      const platformMesh = MeshBuilder.CreateBox(
+        `platform_${platform.id}`,
+        {
+          width: width,
+          height: platform.height,
+          depth: 0.1, // Very thin depth for 2D look
+        },
+        this.scene,
+      );
+
+      platformMesh.position.x = centerX;
+      platformMesh.position.y = centerY;
+      platformMesh.position.z = 0;
+      platformMesh.material = platformMaterial;
+
+      this.platformMeshes.set(platform.id, platformMesh);
+      console.log(
+        `[${this.id}] ✅ Platform "${platform.id}" created: ${width.toFixed(1)}m wide at y=${platform.y_top.toFixed(1)}`,
+      );
+    }
+
+    console.log(`[${this.id}] ✅ Created ${this.platformMeshes.size} platform(s) from config`);
   }
 
   /**
@@ -266,7 +329,9 @@ export class BabylonRenderer extends BaseDatastarReceiver {
         
         // Create new player sprite with unique appearance
         playerSprite = new Sprite(`player-${player.id}`, playerSpriteManager);
-        playerSprite.size = 1.5; // Sprite size in world units
+        // Fixed size - don't vary with screen width
+        playerSprite.width = 1.5; // Fixed width in world units
+        playerSprite.height = 1.5; // Fixed height in world units
         this.playerSprites.set(player.id, playerSprite);
         
         const playerColor = this.getPlayerColor(player.id);
@@ -281,10 +346,14 @@ export class BabylonRenderer extends BaseDatastarReceiver {
       playerSprite.position.z = 0;
 
       // Update facing direction (flip sprite horizontally)
+      // Keep height fixed, only flip width for direction
+      const fixedHeight = 1.5; // Fixed height in world units
       if (player.facing_right) {
-        playerSprite.width = Math.abs(playerSprite.width);
+        playerSprite.width = 1.5; // Fixed width in world units
+        playerSprite.height = fixedHeight;
       } else {
-        playerSprite.width = -Math.abs(playerSprite.width);
+        playerSprite.width = -1.5; // Negative width flips horizontally
+        playerSprite.height = fixedHeight;
       }
     }
     
@@ -324,9 +393,12 @@ export class BabylonRenderer extends BaseDatastarReceiver {
       this.groundMesh.dispose();
     }
 
-    if (this.platformMesh) {
-      this.platformMesh.dispose();
+    // Dispose all platform meshes
+    for (const [id, mesh] of this.platformMeshes) {
+      mesh.dispose();
+      console.log(`[${this.id}] 🗑️ Disposed platform: ${id}`);
     }
+    this.platformMeshes.clear();
 
     this.scene.dispose();
     this.engine.dispose();

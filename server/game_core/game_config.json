@@ -1,0 +1,22 @@
+{
+  "physics": {
+    "gravity": -2000.0,
+    "jump_velocity": 250.0,
+    "move_acceleration": 1200.0,
+    "move_deceleration": 1500.0,
+    "max_horizontal_velocity": 300.0,
+    "ground_y": -10.0,
+    "player_width": 1.5,
+    "player_height": 1.5
+  },
+  "platforms": [
+    {
+      "id": "platform_1",
+      "x_start": -3.0,
+      "x_end": 3.0,
+      "y_top": 2.0,
+      "height": 0.5
+    }
+  ]
+}
+
