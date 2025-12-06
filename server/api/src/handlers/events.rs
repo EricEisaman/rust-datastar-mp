@@ -24,16 +24,6 @@ pub async fn events_handler(
                             // For now, send full state, but in production implement delta encoding
                             let players: Vec<_> = state.players.values().cloned().collect();
                             
-                            // Log player IDs for debugging
-                            if players.len() > 0 {
-                                let player_ids: Vec<String> = players.iter()
-                                    .map(|p| p.id.to_string().chars().take(8).collect())
-                                    .collect();
-                                eprintln!("📤 Sending game state update: {} players (IDs: {:?})", players.len(), player_ids);
-                            } else {
-                                eprintln!("📤 Sending game state update: {} players", players.len());
-                            }
-                            
                             // Datastar signal format: {"signalName": value}
                             // Send the players array directly as the signal value
                             let signals_json = serde_json::json!({
@@ -50,7 +40,6 @@ pub async fn events_handler(
                     }
                 }
                 Ok(message) = chat_rx.recv() => {
-                    eprintln!("💬 Broadcasting chat message via SSE: {} ({}): {}", message.player_name, message.player_id, message.text);
                     // Format message with player name in their color
                     let html_content = format!(
                         r#"<div style="margin-bottom: 8px; font-size: 14px"><span style="color: {}; font-weight: bold;">{}:</span> {}</div>"#,
@@ -58,17 +47,12 @@ pub async fn events_handler(
                         message.player_name,
                         message.text
                     );
-                    eprintln!("💬 HTML content: {}", html_content);
                     
                     let patch = PatchElements::new(html_content.clone())
                         .selector("#chat-messages")
                         .mode(ElementPatchMode::Append);
                     let event = patch.into_datastar_event();
-                    eprintln!("💬 Chat patch event (full): {}", event);
-                    eprintln!("💬 Chat patch event (Display): {:?}", format!("{}", event));
-                    
                     let event_data = format!("{}", event);
-                    eprintln!("💬 Sending SSE event: event=datastar-patch-elements, data length={}", event_data.len());
                     
                     // Set the event type for proper SSE routing
                     yield Ok(Event::default()

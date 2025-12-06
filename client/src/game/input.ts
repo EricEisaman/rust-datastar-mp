@@ -1,9 +1,33 @@
 import { Scene } from '@babylonjs/core';
 import { getPlayerId, initPlayer as initPlayerOnServer } from './player-state';
+import { datastarManager } from './datastar-manager';
 
 type PlayerCommand = 'MoveLeft' | 'MoveRight' | 'Jump' | 'Stop';
 
 let playerId: string;
+
+/**
+ * Check if chat input is currently focused
+ * This prevents game controls from firing when typing in chat
+ */
+function isChatInputFocused(): boolean {
+  // Check if any input element is focused (Babylon.js InputText creates DOM inputs)
+  const activeElement = document.activeElement;
+  if (activeElement && activeElement.tagName === 'INPUT') {
+    return true;
+  }
+  
+  // Also check via ChatGUI if available
+  const chatGUI = datastarManager.getReceiver('chat-gui');
+  if (chatGUI) {
+    const chatGUIWithFocus = chatGUI as unknown as { isInputFocused?: () => boolean };
+    if (typeof chatGUIWithFocus.isInputFocused === 'function') {
+      return chatGUIWithFocus.isInputFocused();
+    }
+  }
+  
+  return false;
+}
 
 export function initPlayer(): void {
   initPlayerOnServer();
@@ -17,6 +41,11 @@ export function setupInput(scene: Scene): void {
 
   // Use Babylon.js observable for continuous movement updates
   const handleMovement = (): void => {
+    // Don't process movement if chat input is focused
+    if (isChatInputFocused()) {
+      return;
+    }
+
     const hasMovementKey = ['ArrowLeft', 'ArrowRight', 'a', 'A', 'd', 'D'].some((key) =>
       activeKeys.has(key)
     );
@@ -49,6 +78,10 @@ export function setupInput(scene: Scene): void {
   window.addEventListener('keydown', (e) => {
     // Don't interfere with chat input
     // If user is typing in chat, don't process game controls
+    if (isChatInputFocused()) {
+      return;
+    }
+    
     const activeElement = document.activeElement;
     if (
       activeElement &&

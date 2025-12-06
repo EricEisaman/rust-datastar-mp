@@ -86,24 +86,17 @@ impl GameConfig {
         // Check if remote_config is specified
         if let Some(remote_url) = &config.remote_config {
             if !remote_url.is_empty() {
-                eprintln!("🌐 Remote config URL found: {}", remote_url);
-                eprintln!("📥 Fetching configuration from remote URL...");
-                
                 match Self::fetch_remote_config(remote_url).await {
                     Ok(remote_config) => {
-                        eprintln!("✅ Successfully loaded configuration from remote URL");
-                        eprintln!("📊 Remote config summary: {} platform(s), {} wall(s)", 
-                            remote_config.platforms.len(), remote_config.walls.len());
+                        eprintln!("✅ Successfully fetched remote config from: {}", remote_url);
                         Ok(remote_config)
                     }
                     Err(e) => {
-                        eprintln!("⚠️ Failed to fetch remote config: {}", e);
-                        eprintln!("⚠️ Falling back to local config file");
+                        eprintln!("⚠️ Failed to fetch remote config from {}: {}, using local config", remote_url, e);
                         Ok(config)
                     }
                 }
             } else {
-                eprintln!("⚠️ remote_config is empty string, using local config");
                 Ok(config)
             }
         } else {

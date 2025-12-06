@@ -23,7 +23,13 @@ export class DatastarUpdateManager {
 
     this.receivers.set(receiver.id, receiver);
     receiver.initialize();
-    console.log(`[DatastarManager] Registered receiver: ${receiver.id}`);
+  }
+
+  /**
+   * Get a registered receiver by ID
+   */
+  getReceiver(receiverId: string): IDatastar | undefined {
+    return this.receivers.get(receiverId);
   }
 
   /**
@@ -34,7 +40,6 @@ export class DatastarUpdateManager {
     if (receiver) {
       receiver.dispose();
       this.receivers.delete(receiverId);
-      console.log(`[DatastarManager] Unregistered receiver: ${receiverId}`);
     }
   }
 
@@ -46,29 +51,71 @@ export class DatastarUpdateManager {
       this.disconnect();
     }
 
-    console.log(`[DatastarManager] Connecting to SSE endpoint: ${endpoint}`);
     this.eventSource = new EventSource(endpoint);
 
     // Handle signal patches
     this.eventSource.addEventListener('datastar-patch-signals', (event: MessageEvent) => {
-      console.log(`[DatastarManager] 📬 Received datastar-patch-signals event`);
-      console.log(
-        `[DatastarManager] 📬 Event data (first 200 chars):`,
-        event.data.substring(0, 200)
-      );
       this.handleSignalPatch(event.data);
     });
 
     // Handle element patches
     this.eventSource.addEventListener('datastar-patch-elements', (event: MessageEvent) => {
-      console.log(`[DatastarManager] 📬 Received datastar-patch-elements event`);
-      console.log(`[DatastarManager] 📬 Event type: ${event.type}`);
-      console.log(`[DatastarManager] 📬 Event data (full):`, event.data);
-      console.log(
-        `[DatastarManager] 📬 Event data (first 500 chars):`,
-        event.data.substring(0, 500)
-      );
-      this.handleElementPatch(event.data);
+      // Check if data is already in the correct format: "elements #selector mode html"
+      let parsedData = event.data;
+      
+      // If data starts with "elements ", it's already in the correct format
+      if (event.data.trim().startsWith('elements ')) {
+        this.handleElementPatch(parsedData);
+        return;
+      }
+      
+      // Otherwise, try to parse multi-line SSE format
+      // Server might send: "data: selector #chat-messages\ndata: mode append\ndata: elements <div>..."
+      if (event.data.includes('data:') || event.data.includes('\n')) {
+        const lines = event.data.split('\n');
+        let selector = '';
+        let mode = 'append';
+        let html = '';
+        
+        for (const line of lines) {
+          const trimmed = line.trim();
+          // Skip empty lines and event type lines
+          if (!trimmed || trimmed.startsWith('event:')) {
+            continue;
+          }
+          
+          if (trimmed.startsWith('data: ')) {
+            const content = trimmed.substring(6).trim(); // Remove "data: " prefix
+            if (content.startsWith('selector ')) {
+              selector = content.substring(9).trim(); // Remove "selector " prefix
+            } else if (content.startsWith('mode ')) {
+              mode = content.substring(5).trim() as 'append' | 'replace' | 'prepend'; // Remove "mode " prefix
+            } else if (content.startsWith('elements ')) {
+              html = content.substring(9).trim(); // Remove "elements " prefix
+            } else if (content.startsWith('<')) {
+              // HTML content without "elements " prefix (might be on a separate data line)
+              html = content;
+            }
+          } else if (trimmed.startsWith('selector ')) {
+            // Direct format without "data: " prefix
+            selector = trimmed.substring(9).trim();
+          } else if (trimmed.startsWith('mode ')) {
+            mode = trimmed.substring(5).trim() as 'append' | 'replace' | 'prepend';
+          } else if (trimmed.startsWith('elements ')) {
+            html = trimmed.substring(9).trim();
+          } else if (trimmed.startsWith('<') && !html) {
+            // HTML content on its own line
+            html = trimmed;
+          }
+        }
+        
+        // Reconstruct the format expected by handleElementPatch
+        if (selector && html) {
+          parsedData = `elements ${selector} ${mode} ${html}`;
+        }
+      }
+      
+      this.handleElementPatch(parsedData);
     });
 
     // Handle regular messages (fallback)
@@ -111,7 +158,6 @@ export class DatastarUpdateManager {
 
     this.eventSource.onopen = () => {
       this.isConnected = true;
-      console.log('[DatastarManager] ✅ SSE connection opened');
       // Initialize all receivers when connected
       for (const receiver of this.receivers.values()) {
         receiver.initialize();
@@ -140,7 +186,6 @@ export class DatastarUpdateManager {
       this.eventSource.close();
       this.eventSource = null;
       this.isConnected = false;
-      console.log('[DatastarManager] Disconnected from SSE');
     }
   }
 
@@ -156,9 +201,6 @@ export class DatastarUpdateManager {
    */
   private handleSignalPatch(data: string): void {
     try {
-      console.log(`[DatastarManager] 📨 Processing signal patch, data length: ${data.length}`);
-      console.log(`[DatastarManager] 📨 Raw data (first 300 chars):`, data.substring(0, 300));
-
       // SSE can send multi-line format: "event: type\ndata: content"
       // Extract just the data part if it's multi-line
       let actualData = data;
@@ -169,7 +211,6 @@ export class DatastarUpdateManager {
         for (const line of lines) {
           if (line.startsWith('data:')) {
             actualData = line.substring(5).trim(); // Remove "data: " prefix
-            console.log(`[DatastarManager] 📨 Extracted data line:`, actualData.substring(0, 200));
             break;
           }
         }
@@ -181,10 +222,6 @@ export class DatastarUpdateManager {
         jsonStr = actualData.substring(8); // Remove "signals " prefix
       }
 
-      console.log(
-        `[DatastarManager] 📨 Final JSON string to parse (first 200 chars):`,
-        jsonStr.substring(0, 200)
-      );
       const signalData = JSON.parse(jsonStr);
 
       // Route to all receivers
@@ -207,9 +244,6 @@ export class DatastarUpdateManager {
    * Datastar format can be: "elements #selector mode html" or JSON or other formats
    */
   private handleElementPatch(data: string): void {
-    console.log(`[DatastarManager] 📨 Handling element patch (full): ${data}`);
-    console.log(`[DatastarManager] 📨 Data type: ${typeof data}, length: ${data.length}`);
-
     let selector = '';
     let mode: 'append' | 'replace' | 'prepend' = 'append';
     let html = '';
@@ -229,7 +263,6 @@ export class DatastarUpdateManager {
           selector = match[1];
           mode = match[2] as 'append' | 'replace' | 'prepend';
           html = match[3];
-          console.log(`[DatastarManager] ✅ Parsed (strategy 1): selector="${selector}", mode="${mode}", html length=${html.length}`);
         } else {
           // Fallback: try to find selector and mode separately
           const selectorMatch = rest.match(/^(#[^\s]+|\.[^\s]+)/);
@@ -251,7 +284,6 @@ export class DatastarUpdateManager {
               mode = 'append';
               html = afterSelector;
             }
-            console.log(`[DatastarManager] ✅ Parsed (strategy 1 fallback): selector="${selector}", mode="${mode}", html length=${html.length}`);
           } else {
             console.error(`[DatastarManager] ❌ Could not parse elements format: ${rest.substring(0, 200)}`);
             return;
@@ -266,7 +298,6 @@ export class DatastarUpdateManager {
             selector = json.selector;
             mode = json.mode || 'append';
             html = json.html;
-            console.log(`[DatastarManager] ✅ Parsed (strategy 2 JSON): selector="${selector}", mode="${mode}", html length=${html.length}`);
           } else {
             console.error(`[DatastarManager] ❌ JSON format missing selector or html:`, json);
             return;
@@ -281,7 +312,6 @@ export class DatastarUpdateManager {
         selector = '#chat-messages';
         mode = 'append';
         html = data.trim();
-        console.log(`[DatastarManager] ⚠️ Parsed (strategy 3 HTML-only): assuming selector="${selector}", mode="${mode}", html length=${html.length}`);
       }
       // Strategy 4: Try to extract from any format that might contain the data
       else {
@@ -291,24 +321,20 @@ export class DatastarUpdateManager {
           selector = '#chat-messages';
           mode = 'append';
           html = htmlMatch[0];
-          console.log(`[DatastarManager] ⚠️ Parsed (strategy 4 regex): extracted HTML, selector="${selector}", html length=${html.length}`);
         } else {
           console.error(`[DatastarManager] ❌ Unknown element patch format: ${data.substring(0, 500)}`);
-          console.error(`[DatastarManager] ❌ Full data dump:`, data);
           return;
         }
       }
 
       if (!selector || !html) {
         console.error(`[DatastarManager] ❌ Missing selector or HTML after parsing: selector="${selector}", html length=${html.length}`);
-        console.error(`[DatastarManager] ❌ Original data: ${data.substring(0, 500)}`);
         return;
       }
 
       // Route to all receivers
       for (const receiver of this.receivers.values()) {
         try {
-          console.log(`[DatastarManager] 📤 Routing element patch to receiver: ${receiver.id}`);
           receiver.onElementUpdate(selector, mode, html);
         } catch (err) {
           console.error(`[DatastarManager] ❌ Error in receiver ${receiver.id}:`, err);
@@ -316,8 +342,6 @@ export class DatastarUpdateManager {
       }
     } catch (err) {
       console.error('[DatastarManager] ❌ Failed to parse element patch:', err);
-      console.error('[DatastarManager] ❌ Data was:', data.substring(0, 500));
-      console.error('[DatastarManager] ❌ Full data:', data);
     }
   }
 }

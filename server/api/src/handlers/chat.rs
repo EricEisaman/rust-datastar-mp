@@ -15,8 +15,6 @@ pub async fn send_message(
     State(app_state): State<AppState>,
     request: axum::extract::Json<ChatRequest>,
 ) -> impl IntoResponse {
-    eprintln!("Received chat message from player {}: {}", request.player_id, request.text);
-    
     // Look up player name and generate color
     let game_state = app_state.game_state.read().await;
     let player = game_state.players.get(&request.player_id);
@@ -29,6 +27,9 @@ pub async fn send_message(
     };
     
     drop(game_state); // Release lock
+    
+    // Log received message before creating ChatMessage (player_name will be moved)
+    eprintln!("📨 Server received chat message from {} ({}): \"{}\"", player_name, request.player_id, request.text);
     
     let message = game_core::ChatMessage {
         player_id: request.player_id,
@@ -43,16 +44,8 @@ pub async fn send_message(
     
     // Idempotent: Broadcasting the same message multiple times is safe
     // (Datastar best practice for network resilience)
-    eprintln!("💬 Attempting to broadcast chat message: player={}, text=\"{}\"", message.player_name, message.text);
-    match app_state.chat_tx.send(message) {
-        Ok(_) => {
-            eprintln!("✅ Chat message broadcast successfully - should be received by SSE handler");
-        },
-        Err(e) => {
-            eprintln!("❌ Failed to broadcast chat message: {:?}", e);
-            eprintln!("❌ Error details: message text=\"{}\"", e.0.text);
-            eprintln!("❌ This usually means no SSE clients are connected (no receivers subscribed to chat_tx)");
-        },
+    if let Err(e) = app_state.chat_tx.send(message) {
+        eprintln!("❌ Failed to broadcast chat message: {:?}", e);
     }
     
     // Return empty response - Datastar will update via SSE patches

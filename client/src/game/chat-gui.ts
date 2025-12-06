@@ -18,11 +18,11 @@
 import {
   Engine,
   Scene,
-  KeyboardEventTypes,
   Animation,
   QuadraticEase,
   CubicEase,
   EasingFunction,
+  KeyboardEventTypes,
 } from '@babylonjs/core';
 import {
   AdvancedDynamicTexture,
@@ -62,6 +62,15 @@ export class ChatGUI extends BaseDatastarReceiver implements IDatastar {
   private isOpen = false;
   private playerId: string;
   private scene: Scene;
+  private inputFocused = false;
+
+  /**
+   * Check if chat input is currently focused
+   * Used by input system to disable game controls when typing
+   */
+  isInputFocused(): boolean {
+    return this.inputFocused;
+  }
 
   constructor(_engine: Engine, scene: Scene) {
     super();
@@ -75,9 +84,6 @@ export class ChatGUI extends BaseDatastarReceiver implements IDatastar {
    * Called automatically when the receiver is registered with DatastarManager
    */
   override initialize(): void {
-    console.log(`[${this.id}] ✅ Chat GUI initialized`);
-    console.log(`[${this.id}] Messages panel exists: ${!!this.messagesPanel}`);
-    console.log(`[${this.id}] Chat panel exists: ${!!this.chatPanel}`);
     // GUI is already initialized in constructor, but this method
     // can be used for re-initialization if needed
   }
@@ -122,8 +128,15 @@ export class ChatGUI extends BaseDatastarReceiver implements IDatastar {
     this.messagesPanel.width = '100%';
     this.messagesPanel.height = '310px';
     this.messagesPanel.top = '10px';
-    this.messagesPanel.verticalAlignment = 0; // TOP
+    this.messagesPanel.left = '0px';
+    this.messagesPanel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    this.messagesPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
     this.messagesPanel.isVertical = true;
+    this.messagesPanel.isVisible = true;
+    this.messagesPanel.paddingTop = '0px';
+    this.messagesPanel.paddingBottom = '0px';
+    this.messagesPanel.paddingLeft = '0px';
+    this.messagesPanel.paddingRight = '0px';
     this.chatPanel.addControl(this.messagesPanel);
 
     // Create input field
@@ -139,33 +152,55 @@ export class ChatGUI extends BaseDatastarReceiver implements IDatastar {
     this.inputField.paddingLeft = '8px';
     this.inputField.paddingRight = '8px';
 
-    // Handle Enter key to send message
-    // Track if input is focused manually
-    let inputFocused = false;
+    // Handle Enter key to send message using proper Babylon.js keyboard observable
+    // Track if input is focused
     this.inputField.onFocusObservable.add(() => {
-      inputFocused = true;
-      console.log(`[${this.id}] 💬 Chat input focused`);
+      this.inputFocused = true;
+      console.log(`[${this.id}] 💬 Input field focused`);
     });
     this.inputField.onBlurObservable.add(() => {
-      inputFocused = false;
-      console.log(`[${this.id}] 💬 Chat input blurred`);
+      this.inputFocused = false;
+      console.log(`[${this.id}] 💬 Input field blurred`);
     });
 
-    // Listen on scene for Enter key when input is focused
-    scene.onKeyboardObservable.add((kbInfo) => {
-      if (this.inputField && inputFocused && kbInfo.type === KeyboardEventTypes.KEYDOWN) {
-        if (kbInfo.event.key === 'Enter') {
-          const text = this.inputField.text.trim();
-          if (text) {
-            console.log(`[${this.id}] ⌨️ Enter key pressed in chat input`);
-            this.sendMessage();
-            if (kbInfo.event.preventDefault) {
+    // Use scene.onKeyboardObservable - the proper Babylon.js way
+    const keyboardObserver = scene.onKeyboardObservable.add((kbInfo) => {
+      // Only handle KEYDOWN events
+      if (kbInfo.type === KeyboardEventTypes.KEYDOWN) {
+        // Check if Enter key is pressed (check both key and code)
+        const isEnter = kbInfo.event.key === 'Enter' || 
+                       kbInfo.event.key === 'NumpadEnter' ||
+                       kbInfo.event.code === 'Enter' ||
+                       kbInfo.event.code === 'NumpadEnter';
+        
+        if (isEnter) {
+          // Check if chat is open and input field exists
+          if (this.isOpen && this.inputField) {
+            // Also check DOM directly - Babylon.js InputText creates a DOM input
+            const activeElement = document.activeElement;
+            const isDOMInputActive = activeElement && activeElement.tagName === 'INPUT';
+            
+            console.log(`[${this.id}] ⌨️ Enter key pressed - isOpen: ${this.isOpen}, inputFocused: ${this.inputFocused}, isDOMInputActive: ${isDOMInputActive}, activeElement: ${activeElement?.tagName}`);
+            
+            // If chat is open, treat Enter as send (unless shift is held)
+            // Check if chat is open - if so, Enter should send message
+            if (!kbInfo.event.shiftKey) {
               kbInfo.event.preventDefault();
+              const text = (this.inputField.text || '').trim();
+              console.log(`[${this.id}] ⌨️ Enter key detected (chat open), text: "${text}"`);
+              if (text) {
+                console.log(`[${this.id}] ⌨️ Sending message via Enter key`);
+                this.sendMessage();
+                return; // Prevent further processing
+              }
             }
           }
         }
       }
     });
+
+    // Store the observer so we can remove it on dispose
+    (this as { _keyboardObserver?: typeof keyboardObserver })._keyboardObserver = keyboardObserver;
 
     this.chatPanel.addControl(this.inputField);
 
@@ -391,13 +426,17 @@ export class ChatGUI extends BaseDatastarReceiver implements IDatastar {
 
   private sendMessage(): void {
     if (!this.inputField) {
-      console.warn(`[${this.id}] ⚠️ Input field not available`);
+      console.error(`[${this.id}] ❌ Input field not available - cannot send message`);
       return;
     }
 
-    const text = this.inputField.text.trim();
+    const text = (this.inputField.text || '').trim();
     if (!text) {
-      console.warn(`[${this.id}] ⚠️ Empty message, not sending`);
+      return;
+    }
+
+    if (!this.playerId) {
+      console.error(`[${this.id}] ❌ Player ID not available - cannot send message`);
       return;
     }
 
@@ -410,32 +449,42 @@ export class ChatGUI extends BaseDatastarReceiver implements IDatastar {
       text: text,
     };
 
-    console.log(`[${this.id}] 📤 Sending chat payload:`, JSON.stringify(payload));
+    // Clear input immediately (optimistic UI update)
+    const originalText = this.inputField.text;
+    this.inputField.text = '';
 
     fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(payload),
     })
       .then(async (response) => {
+        console.log(`[${this.id}] 📥 Received response: status=${response.status}, ok=${response.ok}`);
+        
         if (!response.ok) {
           const errorText = await response.text();
           console.error(
             `[${this.id}] ❌ Chat message failed with status: ${response.status}, error: ${errorText}`
           );
+          // Restore text if send failed
+          if (this.inputField) {
+            this.inputField.text = originalText;
+          }
         } else {
           const responseText = await response.text();
           console.log(
             `[${this.id}] ✅ Chat message sent successfully: "${text}" (response: ${responseText || 'empty'})`
           );
-          // Clear input after successful send
-          if (this.inputField) {
-            this.inputField.text = '';
-          }
         }
       })
       .catch((err) => {
         console.error(`[${this.id}] ❌ Failed to send chat message:`, err);
+        // Restore text if send failed
+        if (this.inputField) {
+          this.inputField.text = originalText;
+        }
       });
   }
 
@@ -451,8 +500,7 @@ export class ChatGUI extends BaseDatastarReceiver implements IDatastar {
    */
   override onElementUpdate(selector: string, mode: string, html: string): void {
     console.log(`[${this.id}] 💬 Element update received: selector=${selector}, mode=${mode}`);
-    console.log(`[${this.id}] 💬 HTML content: ${html.substring(0, 200)}...`);
-
+    
     // Only handle updates for the chat messages panel
     if (selector === '#chat-messages' && this.messagesPanel) {
       console.log(`[${this.id}] ✅ Processing chat message update`);
@@ -474,9 +522,16 @@ export class ChatGUI extends BaseDatastarReceiver implements IDatastar {
             // Extract name and color from span
             nameText = nameSpan.textContent?.replace(':', '').trim() || '';
             const styleAttr = nameSpan.getAttribute('style') || '';
+            // Match color with or without quotes, handle rgb() and hex formats
             const colorMatch = styleAttr.match(/color:\s*([^;]+)/);
             if (colorMatch && colorMatch[1]) {
-              nameColor = colorMatch[1].trim();
+              let extractedColor = colorMatch[1].trim();
+              // Remove quotes if present
+              extractedColor = extractedColor.replace(/^["']|["']$/g, '');
+              nameColor = extractedColor;
+              console.log(`[${this.id}] 🎨 Extracted player color: "${nameColor}" for player: ${nameText}`);
+            } else {
+              console.warn(`[${this.id}] ⚠️ Could not extract color from style: "${styleAttr}"`);
             }
 
             // Extract message text (everything after the span)
@@ -490,15 +545,17 @@ export class ChatGUI extends BaseDatastarReceiver implements IDatastar {
           }
 
           if (!messageText && !nameText) {
-            console.warn(`[${this.id}] ⚠️ Empty message text extracted from HTML`);
             return;
           }
+
+          // Log received chat message
+          console.log(`[${this.id}] 📥 Client received chat message from ${nameText || 'Unknown'}: "${messageText}"`);
 
           // Create a container for the message with proper wrapping
           // Use a single TextBlock that can wrap, with formatted text showing name in color
           const messageId = `message-${Date.now()}-${Math.random()}`;
           const messageContainer = new Rectangle(`container-${messageId}`);
-          messageContainer.height = 'auto';
+          messageContainer.height = '30px'; // Fixed height instead of auto
           messageContainer.width = '100%';
           messageContainer.thickness = 0;
           messageContainer.background = 'transparent';
@@ -506,46 +563,91 @@ export class ChatGUI extends BaseDatastarReceiver implements IDatastar {
           messageContainer.paddingBottom = '4px';
           messageContainer.paddingLeft = '8px';
           messageContainer.paddingRight = '8px';
+          messageContainer.isVisible = true; // Ensure container is visible
+          messageContainer.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+          messageContainer.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
 
           // Create a horizontal stack panel for name (inline) + message (wrapping)
           const nameMessagePanel = new StackPanel(`nameMessage-${messageId}`);
-          nameMessagePanel.height = 'auto';
+          nameMessagePanel.height = '30px'; // Fixed height
           nameMessagePanel.width = '100%';
           nameMessagePanel.isVertical = false; // Horizontal: name on left, message on right
           nameMessagePanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+          nameMessagePanel.isVisible = true; // Ensure panel is visible
           messageContainer.addControl(nameMessagePanel);
 
           // Create name TextBlock with color (inline, no wrap, fixed width)
+          let nameBlock: TextBlock | null = null;
           if (nameText) {
-            const nameBlock = new TextBlock(`name-${messageId}`, `${nameText}: `);
-            nameBlock.height = 'auto';
+            nameBlock = new TextBlock(`name-${messageId}`, `${nameText}: `);
+            nameBlock.height = '30px'; // Fixed height
             nameBlock.width = 'auto';
-            nameBlock.color = nameColor;
+            // Apply the player's color - use the extracted color or fallback to white
+            // Ensure color is in proper format (hex with #)
+            let finalColor = nameColor || '#FFFFFF';
+            if (!finalColor.startsWith('#')) {
+              finalColor = `#${finalColor}`;
+            }
+            // Ensure it's a valid hex color (6 digits)
+            if (!/^#[0-9A-Fa-f]{6}$/.test(finalColor)) {
+              console.warn(`[${this.id}] ⚠️ Invalid color format: "${finalColor}", using white`);
+              finalColor = '#FFFFFF';
+            }
+            nameBlock.color = finalColor;
+            console.log(`[${this.id}] 🎨 Applied color "${finalColor}" to name block for: ${nameText}`);
             nameBlock.fontSize = 14;
             nameBlock.fontWeight = 'bold';
             nameBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+            nameBlock.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
             nameBlock.resizeToFit = true;
             nameBlock.textWrapping = false; // Name doesn't wrap
+            nameBlock.isVisible = true; // Ensure name block is visible
+            // Mark as dirty to force color update
+            nameBlock.markAsDirty();
             nameMessagePanel.addControl(nameBlock);
           }
 
           // Create message TextBlock that can wrap (takes remaining space)
           const messageBlock = new TextBlock(`text-${messageId}`, messageText);
-          messageBlock.height = 'auto';
-          messageBlock.width = '1*'; // Take remaining space, allows wrapping
+          messageBlock.height = '30px'; // Fixed height
+          messageBlock.width = '100%'; // Use 100% width within the panel
           messageBlock.color = 'white';
           messageBlock.fontSize = 14;
           messageBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
-          messageBlock.textWrapping = true; // Enable text wrapping for long messages
-          messageBlock.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+          messageBlock.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+          messageBlock.textWrapping = false; // Disable wrapping for now to ensure visibility
+          messageBlock.isVisible = true; // Ensure message block is visible
           nameMessagePanel.addControl(messageBlock);
 
           if (mode === 'append') {
+            // Ensure messagesPanel is visible and properly set up
+            if (!this.messagesPanel) {
+              console.error(`[${this.id}] ❌ Messages panel is null!`);
+              return;
+            }
+            
             // Add new message to the bottom
             this.messagesPanel.addControl(messageContainer);
             console.log(
-              `[${this.id}] ✅ Chat message appended: "${nameText}: ${messageText.substring(0, 50)}"`
+              `[${this.id}] ✅ Chat message appended: "${nameText}: ${messageText.substring(0, 50)}" (panel has ${this.messagesPanel.children.length} controls)`
             );
+
+            // Force update to ensure rendering - mark all parent controls as dirty
+            messageContainer.markAsDirty();
+            nameMessagePanel.markAsDirty();
+            if (nameBlock) {
+              nameBlock.markAsDirty();
+            }
+            messageBlock.markAsDirty();
+            if (this.messagesPanel) {
+              this.messagesPanel.markAsDirty();
+            }
+            if (this.chatPanel) {
+              this.chatPanel.markAsDirty();
+            }
+            if (this.advancedTexture) {
+              this.advancedTexture.markAsDirty();
+            }
 
             // Animate message appearing
             this.animateMessageIn(messageContainer);
@@ -562,28 +664,15 @@ export class ChatGUI extends BaseDatastarReceiver implements IDatastar {
             controls.forEach((ctrl) => {
               this.messagesPanel!.addControl(ctrl);
             });
-            console.log(
-              `[${this.id}] ✅ Chat message prepended: "${nameText}: ${messageText.substring(0, 50)}"`
-            );
           } else if (mode === 'replace') {
             // Replace all messages
             this.messagesPanel.clearControls();
             this.messagesPanel.addControl(messageContainer);
-            console.log(`[${this.id}] ✅ Chat messages replaced`);
           }
-        } else {
-          console.warn(`[${this.id}] ⚠️ No message element found in HTML: ${html}`);
         }
       } catch (err) {
         console.error(`[${this.id}] ❌ Error processing chat element update:`, err);
-        console.error(`[${this.id}] HTML that failed: ${html}`);
       }
-    } else {
-      // Log unhandled selectors for debugging
-      console.log(
-        `[${this.id}] ⚠️ Received element update for unhandled selector: ${selector} (expected #chat-messages)`
-      );
-      console.log(`[${this.id}] Messages panel exists: ${!!this.messagesPanel}`);
     }
   }
 
@@ -593,17 +682,22 @@ export class ChatGUI extends BaseDatastarReceiver implements IDatastar {
    * Chat doesn't use signal updates, but this method is part of the IDatastar interface.
    * Could be used in the future for chat state signals (e.g., user list, typing indicators).
    */
-  override onSignalUpdate(signalName: string, _data: unknown): void {
+  override onSignalUpdate(_signalName: string, _data: unknown): void {
     // Chat currently uses element patches, not signals
     // This could be extended in the future for chat-related signals
-    console.debug(`[${this.id}] Signal update received (not used by chat):`, signalName);
   }
 
   override dispose(): void {
+    // Remove keyboard observer
+    const observer = (this as { _keyboardObserver?: { dispose: () => void } })._keyboardObserver;
+    if (observer && typeof observer.dispose === 'function') {
+      observer.dispose();
+      delete (this as { _keyboardObserver?: unknown })._keyboardObserver;
+    }
+
     if (this.advancedTexture) {
       this.advancedTexture.dispose();
       this.advancedTexture = null;
     }
-    console.log(`[${this.id}] Disposed`);
   }
 }

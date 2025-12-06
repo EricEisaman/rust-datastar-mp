@@ -70,15 +70,12 @@ export class BabylonRenderer extends BaseDatastarReceiver {
     // Load game config first, then create ground, platforms, and walls
     this.loadGameConfig()
       .then(() => {
-        console.log(`[${this.id}] 🎯 Config loaded successfully, creating game objects...`);
         this.createGround();
         this.createPlatforms();
         this.createWalls();
-        console.log(`[${this.id}] ✅ All game objects created!`);
       })
       .catch((error) => {
         console.error(`[${this.id}] ❌ CRITICAL: Failed to load game config:`, error);
-        console.error(`[${this.id}] ❌ Game will not function correctly without config!`);
       });
 
     // Create chat GUI
@@ -106,20 +103,79 @@ export class BabylonRenderer extends BaseDatastarReceiver {
 
   /**
    * Generate a unique color for a player based on their ID
+   * This matches the server-side color generation algorithm
    */
   private getPlayerColor(playerId: string): string {
-    // Hash the player ID to get a consistent color
+    // Parse UUID and hash the bytes (matching server algorithm)
+    // Convert UUID string to bytes
+    const uuidBytes = this.uuidStringToBytes(playerId);
+    
+    // Hash using same algorithm as server: hash * 31 + byte
     let hash = 0;
-    for (let i = 0; i < playerId.length; i++) {
-      hash = playerId.charCodeAt(i) + ((hash << 5) - hash);
+    for (const byte of uuidBytes) {
+      hash = (hash * 31 + byte) >>> 0; // Use >>> 0 to ensure unsigned 32-bit
     }
+    
+    // Generate HSL color values (matching server)
+    const hue = hash % 360;
+    const saturation = 70 + (hash % 30); // 70-100%
+    const lightness = 50 + (hash % 20); // 50-70%
+    
+    // Convert HSL to RGB (matching server algorithm)
+    const rgb = this.hslToRgb(hue, saturation, lightness);
+    
+    // Return as hex string (matching server format)
+    return `#${rgb.r.toString(16).padStart(2, '0')}${rgb.g.toString(16).padStart(2, '0')}${rgb.b.toString(16).padStart(2, '0')}`.toUpperCase();
+  }
 
-    // Generate a bright, saturated color
-    const hue = Math.abs(hash) % 360;
-    const saturation = 70 + (Math.abs(hash) % 30); // 70-100%
-    const lightness = 50 + (Math.abs(hash) % 20); // 50-70%
+  /**
+   * Convert UUID string to byte array
+   */
+  private uuidStringToBytes(uuid: string): Uint8Array {
+    // Remove hyphens and convert to bytes
+    const hex = uuid.replace(/-/g, '');
+    const bytes = new Uint8Array(16);
+    for (let i = 0; i < 16; i++) {
+      bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
+  }
 
-    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  /**
+   * Convert HSL to RGB (matching server algorithm)
+   */
+  private hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: number } {
+    const h_f = h / 360.0;
+    const s_f = s / 100.0;
+    const l_f = l / 100.0;
+    
+    const c = (1.0 - Math.abs(2.0 * l_f - 1.0)) * s_f;
+    const x = c * (1.0 - Math.abs(((h_f * 6.0) % 2.0) - 1.0));
+    const m = l_f - c / 2.0;
+    
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    
+    if (h_f < 1.0 / 6.0) {
+      r = c; g = x; b = 0;
+    } else if (h_f < 2.0 / 6.0) {
+      r = x; g = c; b = 0;
+    } else if (h_f < 3.0 / 6.0) {
+      r = 0; g = c; b = x;
+    } else if (h_f < 4.0 / 6.0) {
+      r = 0; g = x; b = c;
+    } else if (h_f < 5.0 / 6.0) {
+      r = x; g = 0; b = c;
+    } else {
+      r = c; g = 0; b = x;
+    }
+    
+    return {
+      r: Math.round((r + m) * 255.0),
+      g: Math.round((g + m) * 255.0),
+      b: Math.round((b + m) * 255.0),
+    };
   }
 
   /**
@@ -237,9 +293,6 @@ export class BabylonRenderer extends BaseDatastarReceiver {
     groundMaterial.disableLighting = true; // Completely flat, unlit appearance (toon style)
     this.groundMesh.material = groundMaterial;
 
-    console.log(
-      `[${this.id}] ✅ Ground box created at y=${groundY} (bottom of screen) with color ${groundColorHex}`
-    );
   }
 
   /**
@@ -252,7 +305,6 @@ export class BabylonRenderer extends BaseDatastarReceiver {
         throw new Error(`Failed to load game config: ${response.statusText}`);
       }
       const rawConfig = await response.json();
-      console.log(`[${this.id}] 📥 Raw config from server:`, JSON.stringify(rawConfig, null, 2));
       
       // Explicitly map the config to ensure all fields are present
       this.gameConfig = {
@@ -295,10 +347,6 @@ export class BabylonRenderer extends BaseDatastarReceiver {
             })
           : [],
       };
-      
-      console.log(`[${this.id}] ✅ Parsed game config successfully!`);
-      console.log(`[${this.id}] 📊 Summary: ${this.gameConfig.platforms.length} platform(s), ${this.gameConfig.walls.length} wall(s)`);
-      console.log(`[${this.id}] 📋 Full config:`, JSON.stringify(this.gameConfig, null, 2));
     } catch (error) {
       console.error(`[${this.id}] ❌ Failed to load game config:`, error);
       throw error; // Don't use fallback - fail explicitly so we know there's a problem
@@ -314,18 +362,12 @@ export class BabylonRenderer extends BaseDatastarReceiver {
       return;
     }
 
-    console.log(`[${this.id}] 🏗️ Creating platforms from config:`, this.gameConfig.platforms);
-
     // Create a platform mesh for each platform in the config
     for (const platform of this.gameConfig.platforms) {
       // Use EXACT values from config - no defaults, no fallbacks
       const width = platform.x_end - platform.x_start;
       const centerX = (platform.x_start + platform.x_end) / 2.0;
       const centerY = platform.y_top - platform.height / 2.0;
-
-      console.log(
-        `[${this.id}] 📐 Platform "${platform.id}": x_start=${platform.x_start}, x_end=${platform.x_end}, y_top=${platform.y_top}, height=${platform.height}, width=${width}, centerX=${centerX}, centerY=${centerY}, color=${platform.color}`
-      );
 
       const platformMesh = MeshBuilder.CreateBox(
         `platform_${platform.id}`,
@@ -355,12 +397,7 @@ export class BabylonRenderer extends BaseDatastarReceiver {
       platformMesh.material = platformMaterial;
 
       this.platformMeshes.set(platform.id, platformMesh);
-      console.log(
-        `[${this.id}] ✅ Platform "${platform.id}" created: width=${width.toFixed(2)}, height=${platform.height.toFixed(2)}, position=(${centerX.toFixed(2)}, ${centerY.toFixed(2)}), color=${platformColorHex}`
-      );
     }
-
-    console.log(`[${this.id}] ✅ Created ${this.platformMeshes.size} platform(s) from config`);
   }
 
   /**
@@ -372,18 +409,12 @@ export class BabylonRenderer extends BaseDatastarReceiver {
       return;
     }
 
-    console.log(`[${this.id}] 🏗️ Creating walls from config:`, this.gameConfig.walls);
-
     // Create a wall mesh for each wall in the config
     for (const wall of this.gameConfig.walls) {
       // Use EXACT values from config - no defaults, no fallbacks
       const height = wall.y_top - wall.y_bottom;
       const centerX = wall.x + wall.width / 2.0;
       const centerY = (wall.y_bottom + wall.y_top) / 2.0;
-
-      console.log(
-        `[${this.id}] 📐 Wall "${wall.id}": x=${wall.x}, y_bottom=${wall.y_bottom}, y_top=${wall.y_top}, width=${wall.width}, height=${height}, centerX=${centerX}, centerY=${centerY}, color=${wall.color}`
-      );
 
       const wallMesh = MeshBuilder.CreateBox(
         `wall_${wall.id}`,
@@ -413,12 +444,7 @@ export class BabylonRenderer extends BaseDatastarReceiver {
       wallMesh.material = wallMaterial;
 
       this.wallMeshes.set(wall.id, wallMesh);
-      console.log(
-        `[${this.id}] ✅ Wall "${wall.id}" created: width=${wall.width.toFixed(2)}, height=${height.toFixed(2)}, position=(${centerX.toFixed(2)}, ${centerY.toFixed(2)}), color=${wallColorHex}`
-      );
     }
-
-    console.log(`[${this.id}] ✅ Created ${this.wallMeshes.size} wall(s) from config`);
   }
 
   /**
@@ -429,13 +455,6 @@ export class BabylonRenderer extends BaseDatastarReceiver {
     if (signalName === 'gameState' && Array.isArray(data)) {
       // Type-safe player array - data is already validated as array
       const players: Player[] = data;
-      console.log(`[${this.id}] 📨 Received gameState signal with ${players.length} players`);
-      if (players.length > 0) {
-        console.log(
-          `[${this.id}] 🎮 Players:`,
-          players.map((p) => ({ id: p.id.substring(0, 8), x: p.x.toFixed(1), y: p.y.toFixed(1) }))
-        );
-      }
       // Update sprites based on the new game state
       this.updateSprites(players);
     }
@@ -445,15 +464,10 @@ export class BabylonRenderer extends BaseDatastarReceiver {
    * Update player sprites based on game state
    */
   private updateSprites(players: Player[]): void {
-    console.log(
-      `[${this.id}] 🎨 Updating sprites for ${players.length} players, current sprites: ${this.playerSprites.size}`
-    );
-
     // Remove sprites for players that no longer exist
     const currentPlayerIds = new Set(players.map((p) => p.id));
     for (const [playerId, sprite] of this.playerSprites.entries()) {
       if (!currentPlayerIds.has(playerId)) {
-        console.log(`[${this.id}] 🗑️ Removing sprite for player: ${playerId.substring(0, 8)}`);
         const manager = this.playerSpriteManagers.get(playerId);
         if (manager) {
           manager.dispose();
@@ -469,8 +483,6 @@ export class BabylonRenderer extends BaseDatastarReceiver {
       let playerSprite = this.playerSprites.get(player.id);
 
       if (!playerSprite) {
-        console.log(`[${this.id}] 🆕 Creating new sprite for player: ${player.id.substring(0, 8)}`);
-
         // Create unique texture for this player
         const playerTexture = this.createPlayerSpriteTexture(player.id);
 
@@ -499,11 +511,6 @@ export class BabylonRenderer extends BaseDatastarReceiver {
         playerSprite.width = 1.5; // Fixed width in world units
         playerSprite.height = 1.5; // Fixed height in world units
         this.playerSprites.set(player.id, playerSprite);
-
-        const playerColor = this.getPlayerColor(player.id);
-        console.log(
-          `[${this.id}] ✅ Created unique sprite for player: ${player.id.substring(0, 8)} (color: ${playerColor})`
-        );
       }
 
       // Update player position
@@ -521,8 +528,6 @@ export class BabylonRenderer extends BaseDatastarReceiver {
       playerSprite.height = fixedHeight;
       playerSprite.invertU = !player.facing_right; // Flip horizontally when facing left
     }
-
-    console.log(`[${this.id}] ✅ Updated ${this.playerSprites.size} sprites`);
   }
 
   private update(): void {
@@ -559,22 +564,18 @@ export class BabylonRenderer extends BaseDatastarReceiver {
     }
 
     // Dispose all platform meshes
-    for (const [id, mesh] of this.platformMeshes) {
+    for (const [_id, mesh] of this.platformMeshes) {
       mesh.dispose();
-      console.log(`[${this.id}] 🗑️ Disposed platform: ${id}`);
     }
     this.platformMeshes.clear();
 
     // Dispose all wall meshes
-    for (const [id, mesh] of this.wallMeshes) {
+    for (const [_id, mesh] of this.wallMeshes) {
       mesh.dispose();
-      console.log(`[${this.id}] 🗑️ Disposed wall: ${id}`);
     }
     this.wallMeshes.clear();
 
     this.scene.dispose();
     this.engine.dispose();
-
-    console.log(`[${this.id}] Disposed`);
   }
 }

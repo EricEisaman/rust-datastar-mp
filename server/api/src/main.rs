@@ -22,48 +22,30 @@ async fn main() {
     ];
     
     eprintln!("🚀 Starting server...");
-    eprintln!("🔍 Looking for game config file...");
     
     // Try to find a valid config file path first
     let config_path = config_paths
         .into_iter()
         .flatten()
-        .find(|path| {
-            eprintln!("  Trying: {}", path);
-            std::path::Path::new(path).exists()
-        });
+        .find(|path| std::path::Path::new(path).exists());
     
     let game_config = if let Some(path) = config_path {
         // Use async loading to support remote config fetching
         match game_core::config::GameConfig::load_async(&path).await {
             Ok(config) => {
-                eprintln!("✅ Loaded game configuration from: {}", path);
-                if config.remote_config.is_none() {
-                    eprintln!("📡 Note: Config was loaded from remote URL (remote_config was set and fetched)");
-                }
-                eprintln!("📊 Config summary: {} platform(s), {} wall(s)", 
+                eprintln!("✅ Loaded config: {} platform(s), {} wall(s)", 
                     config.platforms.len(), config.walls.len());
-                for (i, platform) in config.platforms.iter().enumerate() {
-                    eprintln!("  Platform {}: id={}, x_start={}, x_end={}, y_top={}, height={}, color={}", 
-                        i + 1, platform.id, platform.x_start, platform.x_end, 
-                        platform.y_top, platform.height, platform.color);
-                }
                 std::sync::Arc::new(config)
             }
             Err(e) => {
-                eprintln!("⚠️ Failed to load game config from {}: {}", path, e);
-                eprintln!("❌ Falling back to default configuration.");
-                eprintln!("⚠️ WARNING: Server is using DEFAULT config values, not your game_config.json!");
+                eprintln!("⚠️ Failed to load config from {}: {}, using defaults", path, e);
                 std::sync::Arc::new(game_core::config::GameConfig::default())
             }
         }
     } else {
-        eprintln!("❌ Could not find game config file in any of the expected paths.");
-        eprintln!("⚠️ WARNING: Server is using DEFAULT config values, not your game_config.json!");
+        eprintln!("⚠️ Config file not found, using defaults");
         std::sync::Arc::new(game_core::config::GameConfig::default())
     };
-    
-    eprintln!("✅ Configuration loaded successfully");
     
     // Initialize physics system with configuration
     game_core::physics::init(game_config.clone());

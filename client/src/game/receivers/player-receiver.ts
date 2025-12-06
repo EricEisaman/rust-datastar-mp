@@ -66,18 +66,6 @@ export class PlayerReceiver extends BaseDatastarReceiver {
           });
 
           gameState.value = { gameState: players };
-          console.log(`[${this.id}] ✅ Updated game state with ${players.length} players`);
-
-          if (players.length > 0) {
-            const firstPlayer = players[0];
-            if (firstPlayer) {
-              console.log(`[${this.id}] 🎮 First player:`, {
-                id: firstPlayer.id.substring(0, 8),
-                x: firstPlayer.x.toFixed(1),
-                y: firstPlayer.y.toFixed(1),
-              });
-            }
-          }
         }
       } catch (err) {
         console.error(`[${this.id}] Error processing game state update:`, err);
