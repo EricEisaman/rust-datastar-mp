@@ -27,23 +27,14 @@ COPY server/Cargo.toml ./server/
 COPY server/api/Cargo.toml ./server/api/
 COPY server/game_core/Cargo.toml ./server/game_core/
 
-# Create dummy source files to cache dependencies
-# Generate Cargo.lock (it may be gitignored, so we always generate it for reproducible builds)
-RUN cd server && \
-    cargo generate-lockfile && \
-    mkdir -p api/src game_core/src && \
-    echo "fn main() {}" > api/src/main.rs && \
-    echo "pub fn dummy() {}" > game_core/src/lib.rs && \
-    cargo build --release && \
-    rm -rf api/src game_core/src target/release/deps/api* target/release/deps/game_core*
-
-# Copy actual source code
+# Copy all source code (simpler approach - dependency caching will still work for Cargo deps)
 COPY server/api/src ./server/api/src
 COPY server/game_core/src ./server/game_core/src
 
-# Build the release binary
+# Generate Cargo.lock and build
 WORKDIR /app/server
-RUN cargo build --release
+RUN cargo generate-lockfile && \
+    cargo build --release
 
 # Stage 3: Runtime
 FROM debian:bookworm-slim
