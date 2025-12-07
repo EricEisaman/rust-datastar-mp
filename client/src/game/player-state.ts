@@ -63,6 +63,7 @@ export function initPlayer(): void {
     });
 }
 
+
 // NOTE: The old direct SSE listener has been replaced by the DatastarUpdateManager pattern.
 // See datastar-init.ts for the new initialization.
 // This code is kept for backward compatibility but will be removed in a future update.

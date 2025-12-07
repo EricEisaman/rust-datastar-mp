@@ -37,6 +37,23 @@ pub async fn events_handler(
                                 .event("datastar-patch-signals")
                                 .data(format!("{}", event)));
                         }
+                        GameUpdate::PlayerLeft { player_id, player_name } => {
+                            // Broadcast player left message as a signal update
+                            // Clients can listen for this to remove the player from rendering
+                            let signals_json = serde_json::json!({
+                                "playerLeft": {
+                                    "player_id": player_id.to_string(),
+                                    "player_name": player_name
+                                }
+                            });
+                            
+                            let patch = PatchSignals::new(serde_json::to_string(&signals_json).unwrap());
+                            let event = patch.into_datastar_event();
+                            
+                            yield Ok(Event::default()
+                                .event("datastar-patch-signals")
+                                .data(format!("{}", event)));
+                        }
                     }
                 }
                 Ok(message) = chat_rx.recv() => {

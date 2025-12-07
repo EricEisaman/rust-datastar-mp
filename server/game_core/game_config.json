@@ -1,5 +1,6 @@
 {
   "remote_config": "https://raw.githubusercontent.com/EricEisaman/config-haven/main/configs/rust-datastar-md-config.json",
+  "idle_timeout": 180,
   "physics": {
     "gravity": -130.0,
     "jump_velocity": 50.0,

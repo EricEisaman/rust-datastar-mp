@@ -8,9 +8,17 @@ pub struct GameConfig {
     /// If set, the server will fetch config from this URL instead of using local file
     #[serde(skip_serializing_if = "Option::is_none")]
     pub remote_config: Option<String>,
+    /// Idle timeout in seconds - players inactive for this duration will be disconnected
+    /// Default: 180 seconds (3 minutes)
+    #[serde(default = "default_idle_timeout")]
+    pub idle_timeout: u64,
     pub physics: PhysicsConfig,
     pub platforms: Vec<PlatformConfig>,
     pub walls: Vec<WallConfig>,
+}
+
+fn default_idle_timeout() -> u64 {
+    180 // 3 minutes default
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -124,6 +132,7 @@ impl GameConfig {
         // Ensure remote_config is None in the fetched config (prevent recursion)
         Ok(GameConfig {
             remote_config: None,
+            idle_timeout: config.idle_timeout,
             physics: config.physics,
             platforms: config.platforms,
             walls: config.walls,
@@ -140,6 +149,7 @@ impl GameConfig {
     pub fn default() -> Self {
         Self {
             remote_config: None,
+            idle_timeout: 180, // 3 minutes default
             physics: PhysicsConfig {
                 gravity: -2000.0,
                 jump_velocity: 250.0,

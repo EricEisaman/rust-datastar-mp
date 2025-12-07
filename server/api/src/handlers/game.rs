@@ -41,10 +41,15 @@ pub async fn player_command(
     Json(request): Json<CommandRequest>,
 ) -> impl axum::response::IntoResponse {
     // Add player to game state if they don't exist (idempotent)
+    // Update activity timestamp when player sends a command
     {
         let mut game_state = app_state.game_state.write().await;
         if !game_state.players.contains_key(&request.player_id) {
             game_state.add_player(request.player_id);
+        }
+        // Update activity timestamp
+        if let Some(player) = game_state.players.get_mut(&request.player_id) {
+            player.update_activity();
         }
     }
     

@@ -15,18 +15,20 @@ pub async fn send_message(
     State(app_state): State<AppState>,
     request: axum::extract::Json<ChatRequest>,
 ) -> impl IntoResponse {
-    // Look up player name and generate color
-    let game_state = app_state.game_state.read().await;
-    let player = game_state.players.get(&request.player_id);
-    
-    let (player_name, player_color) = if let Some(player) = player {
-        (player.name.clone(), game_core::player_color::get_player_color(&player.id))
-    } else {
-        // Fallback if player not found
-        (format!("Player-{}", &request.player_id.to_string()[..8]), "#FFFFFF".to_string())
+    // Look up player name and generate color, update activity timestamp
+    let (player_name, player_color) = {
+        let mut game_state = app_state.game_state.write().await;
+        let player = game_state.players.get_mut(&request.player_id);
+        
+        if let Some(player) = player {
+            // Update activity timestamp when player sends chat
+            player.update_activity();
+            (player.name.clone(), game_core::player_color::get_player_color(&player.id))
+        } else {
+            // Fallback if player not found
+            (format!("Player-{}", &request.player_id.to_string()[..8]), "#FFFFFF".to_string())
+        }
     };
-    
-    drop(game_state); // Release lock
     
     // Log received message before creating ChatMessage (player_name will be moved)
     eprintln!("📨 Server received chat message from {} ({}): \"{}\"", player_name, request.player_id, request.text);
