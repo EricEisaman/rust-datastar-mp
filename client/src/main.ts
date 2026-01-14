@@ -45,7 +45,7 @@ function init(): void {
     canvas.height = window.innerHeight;
   });
 
-  console.log('✅ Application initialized');
+  //console.log('✅ Application initialized');
 }
 
 // Initialize when DOM is ready
